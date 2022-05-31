@@ -8,6 +8,7 @@ import os
 import sys
 import json
 import time
+import threading as tr
 
 
 def readSequences(linestart, linestop, all=False):
@@ -134,7 +135,7 @@ def createJSON(DNA, k, d):
     createdFile = f'({k},{d})-motifs.json'
     return motifdict, createdFile
 
-
+# search for 10-mers with 1 mismatch in E.coli genome
 if __name__ == '__main__':
     start = time.time()
     DNA = readSequences(0, 76, False)
