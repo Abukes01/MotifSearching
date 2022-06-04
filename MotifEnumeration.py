@@ -12,10 +12,10 @@ import json
 import time
 
 
-def readSequences():
+def readSequences(linestart, linestop, all=False):
     if not os.path.isfile('./compiled_sequences.fasta'):
         if not os.path.isdir('./sequences'):
-            print("There seems to not be a 'sequences' folder in current directory."
+            print("There seems to not be a 'sequences' folder present in current directory."
                   "This directory is essential for the program to work. It will be now created."
                   "Please move all sequence FASTA files to be worked on into this directory and run the program again")
             os.mkdir('./sequences')
@@ -26,16 +26,30 @@ def readSequences():
             elif sys.platform == 'linux' or sys.platform == 'linux2' or sys.platform == 'darwin':
                 os.system('read -n1 -r -p "Press any key to continue..."')
         else:
-            with open("compiled_sequences.fasta", 'w') as f:
-                for sequence in os.listdir('./sequences'):
-                    with open(f'./sequences/{sequence}', 'rt') as s:
-                        readseq = ''
-                        for line in s.readlines()[1:76]:
-                            readseq += line.strip('\n')
-                        readseq += '\n'
-                        f.writelines(readseq)
-            with open('./compiled_sequences.fasta', 'rt') as f:
-                DNA = f.readlines()
+            if not all:
+                with open("compiled_sequences.fasta", 'w') as f:
+                    for sequence in os.listdir('./sequences'):
+                        with open(f'./sequences/{sequence}', 'rt') as s:
+                            readseq = ''
+                            for line in s.readlines()[linestart:linestop]:
+                                if not line.startswith('>'):
+                                    readseq += line.strip('\n')
+                            readseq += '\n'
+                            f.writelines(readseq)
+                with open('./compiled_sequences.fasta', 'rt') as f:
+                    DNA = f.readlines()
+            else:
+                with open("compiled_sequences.fasta", 'w') as f:
+                    for sequence in os.listdir('./sequences'):
+                        with open(f'./sequences/{sequence}', 'rt') as s:
+                            readseq = ''
+                            for line in s.readlines():
+                                if not line.startswith('>'):
+                                    readseq += line.strip('\n')
+                            readseq += '\n'
+                            f.writelines(readseq)
+                with open('./compiled_sequences.fasta', 'rt') as f:
+                    DNA = f.readlines()
     else:
         with open('./compiled_sequences.fasta', 'rt') as f:
             DNA = f.readlines()
@@ -88,4 +102,5 @@ def createJSON(DNA, k, d):
 
 
 if __name__ == '__main__':
-    createJSON(readSequences(), 12, 3)
+    DNA = readSequences(0, 76, False)
+    createJSON(DNA, 12, 3)
