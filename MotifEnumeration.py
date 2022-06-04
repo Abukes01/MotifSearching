@@ -27,7 +27,7 @@ def readSequences(linestart, linestop, all=False):
                 os.system('read -n1 -r -p "Press any key to continue..."')
         else:
             if not all:
-                with open("compiled_sequences.fasta", 'w') as f:
+                with open("./compiled_sequences.fasta", 'w') as f:
                     for sequence in os.listdir('./sequences'):
                         with open(f'./sequences/{sequence}', 'rt') as s:
                             readseq = ''
