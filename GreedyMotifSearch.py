@@ -92,7 +92,7 @@ if __name__ == '__main__':
     from Motifs_Definitions import defineMotifs
     import pprint as pp
 
-    DNA = readSequences()
+    DNA = readSequences(0, 76, False)
     bestMotifsNoSuccession = greedyMotifSearch(DNA, 12, len(DNA), False)
     bestMotifsWithSuccession = greedyMotifSearch(DNA, 12, len(DNA))
     pp.pprint(defineMotifs(bestMotifsNoSuccession))
