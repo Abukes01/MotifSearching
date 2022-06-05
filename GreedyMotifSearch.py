@@ -1,6 +1,4 @@
 """
-Jakub Susoł 274300
-Zadanie 1 zaliczenie
 Algorytmika
 
 Algorytm GreedyMotifSearch

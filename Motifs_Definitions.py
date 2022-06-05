@@ -1,6 +1,4 @@
 """
-Jakub Susoł 274300
-Zadanie 1 zaliczenie
 Algorytmika
 
 Algorytmy obliczające Score, Count, Profile i Consensus dla motywów uzyskanych od MotifEnumeration.
