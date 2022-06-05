@@ -40,6 +40,7 @@ def distancePatternString(pattern: str, dna: list):
             if a != b:
                 distance += 1
         return distance
+
     k = len(pattern)
     distance = 0
     for sequence in dna:
@@ -51,17 +52,25 @@ def distancePatternString(pattern: str, dna: list):
         distance += hammingDist
     return distance
 
+
 def medianString(dna: list, k: int):
     distance = 1e100
     median = ''
-    for i in range(4**k):
-        print(f'Comparing pattern {i+1}/{4**k}')
+    for i in range(4 ** k):
+        print(f'Comparing pattern {i + 1}/{4 ** k}')
         pattern = numberToPattern(i, k)
         patternDist = distancePatternString(pattern, dna)
         if distance > patternDist:
             distance = patternDist
             median = pattern
-    return median
+    return median, print(median)
 
-DNA = readSequences(0, 76, False)
-print(medianString(DNA, 12))
+
+if __name__ == '__main__':
+    import time
+    start = time.time()
+    DNA = readSequences(0, 76, False)
+    print(medianString(DNA, 12))
+    end = time.time()
+    with open("./medianstringtime.txt", 'w') as t:
+        t.write(f'Time for medianstring to finish is {end-start} s.')

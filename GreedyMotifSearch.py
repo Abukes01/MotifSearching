@@ -76,7 +76,7 @@ def greedyMotifSearch(dna: list, k: int, t: int, succession=True):
     bestMotifs = [rawDna[0:k] for rawDna in dna]
     bmCount, bmProfile = count_profile(bestMotifs, succession)
     for kmer in range(len(dna[0]) - k):
-        print(f'Comparing k-mer {kmer+1}/{len(dna[0]) - k}')
+        #print(f'Comparing k-mer {kmer+1}/{len(dna[0]) - k}')
         motifs = [dna[0][kmer:kmer + k]]
         for i in range(1, t):
             count, profile = count_profile(motifs, succession)
@@ -89,12 +89,15 @@ def greedyMotifSearch(dna: list, k: int, t: int, succession=True):
 
 if __name__ == '__main__':
     from MotifEnumeration import readSequences
-    from Motifs_Definitions import defineMotifs
+    from Motifs_Definitions import makeComparisonJSON
     import pprint as pp
-
+    import time
+    start = time.time()
     DNA = readSequences(0, 76, False)
     bestMotifsNoSuccession = greedyMotifSearch(DNA, 12, len(DNA), False)
     bestMotifsWithSuccession = greedyMotifSearch(DNA, 12, len(DNA))
-    pp.pprint(defineMotifs(bestMotifsNoSuccession))
-    pp.pprint(defineMotifs(bestMotifsWithSuccession))
+    makeComparisonJSON(bestMotifsNoSuccession, 'greedy_k12_NoSuccession')
+    makeComparisonJSON(bestMotifsWithSuccession, 'greedy_k12_Succession')
+    stop = time.time()
+    print(f"This script took {stop-start} s to finish.")
 

@@ -51,8 +51,44 @@ def readSequences(linestart, linestop, all=False):
                 with open('./compiled_sequences.fasta', 'rt') as f:
                     DNA = f.readlines()
     else:
-        with open('./compiled_sequences.fasta', 'rt') as f:
-            DNA = f.readlines()
+        try:
+            while True:
+                choice = input("There are sequences that were compiled previously. Load from them? [Y/N]\n?>> ")
+                if choice in ["Y", 'y', '']:
+                    with open('./compiled_sequences.fasta', 'rt') as f:
+                        DNA = f.readlines()
+                    break
+                elif choice in ["N", 'n']:
+                    if not all:
+                        with open("./compiled_sequences.fasta", 'w') as f:
+                            for sequence in os.listdir('./sequences'):
+                                with open(f'./sequences/{sequence}', 'rt') as s:
+                                    readseq = ''
+                                    for line in s.readlines()[linestart:linestop]:
+                                        if not line.startswith('>'):
+                                            readseq += line.strip('\n')
+                                    readseq += '\n'
+                                    f.writelines(readseq)
+                        with open('./compiled_sequences.fasta', 'rt') as f:
+                            DNA = f.readlines()
+                        break
+                    else:
+                        with open("compiled_sequences.fasta", 'w') as f:
+                            for sequence in os.listdir('./sequences'):
+                                with open(f'./sequences/{sequence}', 'rt') as s:
+                                    readseq = ''
+                                    for line in s.readlines():
+                                        if not line.startswith('>'):
+                                            readseq += line.strip('\n')
+                                    readseq += '\n'
+                                    f.writelines(readseq)
+                        with open('./compiled_sequences.fasta', 'rt') as f:
+                            DNA = f.readlines()
+                        break
+                else:
+                    raise ValueError
+        except ValueError:
+            print("The provided answer is invalid, try Y or N.\n")
     return DNA
 
 
@@ -102,5 +138,8 @@ def createJSON(DNA, k, d):
 
 
 if __name__ == '__main__':
+    start = time.time()
     DNA = readSequences(0, 76, False)
     createJSON(DNA, 12, 3)
+    end = time.time()
+    print(f"The script took {end-start} s to complete for sequences of length {len(DNA[0])}")

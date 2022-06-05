@@ -48,14 +48,26 @@ def loadDataOrCreate():
             try:
                 k = int(input('Input k integer (how long a mer is) for motif enumeration\nK = '))
                 d = int(input('Input d integer (how many mismatches there are at maximum) for motif enumeration\nD = '))
+                lines = int(input(
+                    'Input how long should the sequences be in lines of fasta file read for motif enumeration or enter 0 for all.\nLines = '))
                 break
             except ValueError:
                 print("The number you input is not a valid integer, please try again.\n")
         print("The program will now create a motifs file and read it. Starting in 5 seconds")
         time.sleep(5)
-        motifsdict, createdFile = createJSON(readSequences(), k, d)
+        if lines != 0:
+            motifsdict, createdFile = createJSON(readSequences(0, lines, False), k, d)
+        else:
+            motifsdict, createdFile = createJSON(readSequences(0, 76, True), k, d)
         return motifsdict, createdFile
     pass
+
+
+def makeMotifsDictFromList(motifslist: list):
+    motifsdict = dict()
+    for motifs in motifslist:
+        motifsdict[motifs[0]] = motifs
+    return motifsdict
 
 
 def defineMotifs(motifsDict):
@@ -125,5 +137,10 @@ def makeComparisonJSON(motifsDict, file):
 
 
 if __name__ == '__main__':
+    import time
+
+    start = time.time()
     motifsDict, file = loadDataOrCreate()
     makeComparisonJSON(motifsDict, file)
+    end = time.time()
+    print(f"The script took {end - start} s to finish")

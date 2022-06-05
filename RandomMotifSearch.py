@@ -33,5 +33,9 @@ def randomizedMotifSearch(dna: list, k: int):
         else:
             return bestMotifs
 
-
-randomizedMotifSearch(DNA, 12)
+if __name__ == '__main__':
+    import time
+    start = time.time()
+    randomizedMotifSearch(DNA, 12)
+    stop = time.time()
+    print(f"This script ran in {stop-start} s")
