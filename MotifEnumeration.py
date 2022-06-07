@@ -142,3 +142,4 @@ if __name__ == '__main__':
     createJSON(DNA, 12, 3)
     end = time.time()
     print(f"The script took {end-start} s to complete for sequences of length {len(DNA[0])}")
+
