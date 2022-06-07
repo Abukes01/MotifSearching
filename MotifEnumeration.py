@@ -8,7 +8,6 @@ import os
 import sys
 import json
 import time
-import threading as tr
 
 
 def readSequences(linestart, linestop, all=False):
