@@ -94,8 +94,8 @@ if __name__ == '__main__':
     DNA = readSequences(0, 76, False)
     bestMotifsNoSuccession = greedyMotifSearch(DNA, 12, len(DNA), False)
     bestMotifsWithSuccession = greedyMotifSearch(DNA, 12, len(DNA))
-    makeComparisonJSON(bestMotifsNoSuccession, 'greedy_k12_NoSuccession')
-    makeComparisonJSON(bestMotifsWithSuccession, 'greedy_k12_Succession')
+    makeComparisonJSON(bestMotifsNoSuccession, 'greedy_NoSuccession')
+    makeComparisonJSON(bestMotifsWithSuccession, 'greedy_Succession')
     stop = time.time()
     print(f"This script took {stop-start} s to finish.")
 

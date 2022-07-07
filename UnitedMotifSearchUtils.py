@@ -91,12 +91,12 @@ def motifEnumeration(dna: list, k: int, d: int):
     patterns = dict()  # new patterns set
     refSeq = dna[0]
     patternExistsIn = dict()
-    for compDna in dna[1::]:
+    for compDna in dna:
         # for each k-mer pattern in dna
         for i in range(len(refSeq) - k):
             pattern = refSeq[i:i + k]
             patternExistsIn[pattern] = [(0, pattern)]
-            print(f'Comparing {i + 1}/{len(refSeq) - k} in {dna.index(compDna)} of {len(dna) - 1}')
+            print(f'Comparing {i + 1}/{len(refSeq) - k} in {dna.index(compDna) + 1} of {len(dna)}')
             # for each pattern' differing from pattern by at most d mismatches
             for j in range(len(compDna) - k):
                 patternPrime = compDna[j:j + k]
@@ -411,3 +411,95 @@ def randomizedMotifSearch(dna: list, k: int):
             bestMotifs = motifs
         else:
             return bestMotifs
+
+
+if __name__ == '__main__':
+    class ChoiceException(Exception):
+        pass
+
+
+    readall = True
+    linestart = 0
+    linestop = 0
+    while True:
+        try:
+            allLines = input("Read all lines? [Y/N, default: Y]\n?>> ")
+            if allLines in ["y", "Y", ""]:
+                print("Reading all sequence data...")
+                break
+            elif allLines in ["n", "N"]:
+                readall = False
+                linestart = int(input("Please input the line to start reading from in the sequences:\n>>> "))
+                linestop = int(input("Please input the line to stop reading on in the sequences:\n>>> "))
+                if linestart>=0 and linestop>0:
+                    print(f'Reading sequence data from lines {linestart} to {linestop}...')
+                    break
+            else:
+                raise ChoiceException
+        except ValueError:
+            print("You must provide valid integer numbers from 0 to the amount of lines your sequence files have.\n")
+        except ChoiceException:
+            print("You must provide a Y/N answer or leave blank for default.\n")
+
+    DNA = readSequences(linestart, linestop, readall)
+
+    while True:
+        try:
+            k = int(input("Please input the length of motifs you are searching for:\n?>> "))
+            d = int(input("Please input the maximum number of mismatches in the motifs you are searching for:\n?>> "))
+            if k and d:
+                print(f"The algorithms will search for {k}-length motifs with at most {d} mutations/mismatches")
+                break
+        except ValueError:
+            print("Please input a valid integer.")
+
+    run = True
+    while run:
+        try:
+            print('Choose what algorithm you want to use:\n'
+                  '[1] Enumeration and definition\n'
+                  '[2] Median String\n'
+                  '[3] Greedy search\n'
+                  '[4] Random Search')
+            choice1 = int(input("?>> "))
+            if choice1 == 1:
+                print("Running Motif Enumeration and Motif Definition algorithms, this may take a moment.")
+                createJSON(DNA, k, d)
+                motifsDict, file = loadDataOrCreate()
+                makeComparisonJSON(motifsDict, file)
+                print("Results saved in motifs/definitions/ folder.")
+                run = False
+            elif choice1 == 2:
+                print("Running Median String algorithm, this may take a moment.")
+                with open('./medianStringSequences.txt', 'w') as result:
+                    medstr = medianString(DNA, k)[0]
+                    result.write(medstr)
+                run = False
+            elif choice1 == 3:
+                print("Running Greedy Motif Search algorithm, this may take a moment.")
+                bestMotifsNoSuccession = greedyMotifSearch(DNA, k, len(DNA), False)
+                bestMotifsWithSuccession = greedyMotifSearch(DNA, k, len(DNA))
+                makeComparisonJSON(bestMotifsNoSuccession, 'greedy_NoSuccession')
+                makeComparisonJSON(bestMotifsWithSuccession, 'greedy_Succession')
+                print("Results saved in motifs/definitions/ folder.")
+                run = False
+            elif choice1 == 4:
+                print("Running Randomized Motif Search algorithm, this may take a moment.")
+                while True:
+                    try:
+                        iterations = int(input("Please input the number of iterations to run:\n?>> "))
+                        if iterations <= 0:
+                            raise ValueError
+                        else:
+                            break
+                    except ValueError:
+                        print("Please input a valid, non-negative and non-zero integer.\n")
+                with open('./RandomSearchResults.json', 'w') as result:
+                    searchResults = [randomizedMotifSearch(DNA, k) for _ in range(iterations)]
+                    resultsDict = {searchResults[i][0]: searchResults[i] for i in range(len(searchResults))}
+                    json.dump(resultsDict, result)
+                run = False
+            else:
+                raise ChoiceException
+        except ChoiceException:
+            print("Please choose a valid option from the listed options.\n")
