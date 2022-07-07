@@ -163,7 +163,6 @@ def loadDataOrCreate():
                     'The number you chose is either not included on available list or Your input is not a '
                     'number.\nPlease input a number from the list of possible inputs.\n')
     else:
-        from MotifEnumeration import readSequences, createJSON
         while True:
             try:
                 k = int(input('Input k integer (how long a mer is) for motif enumeration\nK = '))

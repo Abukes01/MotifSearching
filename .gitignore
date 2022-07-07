@@ -1,3 +1,5 @@
 **/*.docx
 **/.idea
 **/compiled_sequences.fasta
+**/*.exe
+**/*.spec
