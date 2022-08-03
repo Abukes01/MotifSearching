@@ -7,7 +7,6 @@ by vectorising the functions and running them in parallel on CUDA capable GPUs o
 import os
 import sys
 import time
-import numba
 import numpy as np
 import re
 
@@ -136,6 +135,12 @@ def vectoriseSequences(k: int, sequences: list):
 
     return np.array([[numSequence[i:i+k] for i in range(len(numSequence)-k)] for numSequence in numDNA])
 
+def unvectorise(vectorToConvert):
+    pattern = ''
+    for nucleotide in vectorToConvert:
+        pattern += unConversionDict[nucleotide]
+    return pattern
+
 def vectorEnumerateMotifs(vectorisedSequences, d):
     pass
 
@@ -143,5 +148,5 @@ def vectorEnumerateMotifs(vectorisedSequences, d):
 if __name__ == '__main__':
     DNA = readSequences(0, 0)
     vDNA = vectoriseSequences(15, DNA)
-    print("Normal sequence:", DNA, len(DNA[0]))
-    print("Vectorised sequence:", vDNA, len(vDNA), len(vDNA[0]), len(vDNA[0][0]))
+    #print("Normal sequence:", DNA, len(DNA[0]))
+    #print("Vectorised sequence:", vDNA, len(vDNA), len(vDNA[0]), len(vDNA[0][0]))
