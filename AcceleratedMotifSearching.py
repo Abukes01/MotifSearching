@@ -7,6 +7,7 @@ by vectorising the functions and running them in parallel on CUDA capable GPUs o
 import os
 import sys
 import time
+import numba
 import numpy as np
 import re
 
@@ -143,6 +144,20 @@ def unvectorise(vectorToConvert):
 
 def vectorEnumerateMotifs(vectorisedSequences, d):
     pass
+
+def vectorEnumerateMotifs(vDNA, refSeq: int, d: int):
+    patterns = []
+    for sequence in vDNA:
+        # for k-mer in refSeq
+        for index, pattern in enumerate(vDNA[refSeq]):
+            patterns.append([])
+            print(f"Comparing {index+1}/{len(vDNA[refSeq])}")
+            # for pattern' differing from pattern by at most d mismatches
+            for patternPrime in sequence:
+                patternDiff = patternPrime - pattern
+                if np.count_nonzero(patternDiff) <= d:
+                    patterns[index].append(patternPrime)
+    return patterns
 
 
 if __name__ == '__main__':
