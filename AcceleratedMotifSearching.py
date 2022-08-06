@@ -145,19 +145,19 @@ def unvectorise(vectorToConvert):
     return pattern
 
 
-def vectorEnumerateMotifs(vDNA, refSeq: int, d: int):
-    patterns = []
+def vectorEnumerateMotifs(vDNA, searchPatterns: np.typing.NDArray, d: int, subprocessID: int):
+    patterns_part = []
     for sequence in vDNA:
         # for k-mer in refSeq
-        for index, pattern in enumerate(vDNA[refSeq]):
-            patterns.append([])
-            print(f"Comparing {index + 1}/{len(vDNA[refSeq])}")
+        for index, pattern in enumerate(searchPatterns):
+            patterns_part.append([])
+            print(f"[Worker {subprocessID}] Comparing {index + 1}/{len(searchPatterns)}")
             # for pattern' differing from pattern by at most d mismatches
             for patternPrime in sequence:
                 patternDiff = patternPrime - pattern
                 if np.count_nonzero(patternDiff) <= d:
-                    patterns[index].append(patternPrime)
-    return patterns
+                    patterns_part[index].append(patternPrime)
+    return patterns_part
 
 
 if __name__ == '__main__':
