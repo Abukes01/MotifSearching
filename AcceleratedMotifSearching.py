@@ -11,11 +11,11 @@ import numba
 import numpy as np
 import re
 
-
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
 conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4}
 unConversionDict = {1: "A", 2: "T", 3: "G", 4: "C"}
+
 
 # Load data as plaintext and save all sequences into a separate file (same as in normal program)
 # This is relatively fast compared to the rest of the algorithms, and I'm a little bit too lazy to change already
@@ -108,6 +108,7 @@ def readSequences(linestart: int, linestop: int, all=True):
             print("The provided answer is invalid, try Y or N.\n")
     return DNA
 
+
 # Vectorise the sequences read as plaintext
 def vectoriseSequences(k: int, sequences: list):
     """
@@ -134,7 +135,8 @@ def vectoriseSequences(k: int, sequences: list):
         numDNA.append(np.array(numSequence))
     numDNA = np.array(numDNA)
 
-    return np.array([[numSequence[i:i+k] for i in range(len(numSequence)-k)] for numSequence in numDNA])
+    return np.array([[numSequence[i:i + k] for i in range(len(numSequence) - k)] for numSequence in numDNA])
+
 
 def unvectorise(vectorToConvert):
     pattern = ''
@@ -142,8 +144,6 @@ def unvectorise(vectorToConvert):
         pattern += unConversionDict[nucleotide]
     return pattern
 
-def vectorEnumerateMotifs(vectorisedSequences, d):
-    pass
 
 def vectorEnumerateMotifs(vDNA, refSeq: int, d: int):
     patterns = []
@@ -151,7 +151,7 @@ def vectorEnumerateMotifs(vDNA, refSeq: int, d: int):
         # for k-mer in refSeq
         for index, pattern in enumerate(vDNA[refSeq]):
             patterns.append([])
-            print(f"Comparing {index+1}/{len(vDNA[refSeq])}")
+            print(f"Comparing {index + 1}/{len(vDNA[refSeq])}")
             # for pattern' differing from pattern by at most d mismatches
             for patternPrime in sequence:
                 patternDiff = patternPrime - pattern
@@ -163,5 +163,5 @@ def vectorEnumerateMotifs(vDNA, refSeq: int, d: int):
 if __name__ == '__main__':
     DNA = readSequences(0, 0)
     vDNA = vectoriseSequences(15, DNA)
-    #print("Normal sequence:", DNA, len(DNA[0]))
-    #print("Vectorised sequence:", vDNA, len(vDNA), len(vDNA[0]), len(vDNA[0][0]))
+    # print("Normal sequence:", DNA, len(DNA[0]))
+    # print("Vectorised sequence:", vDNA, len(vDNA), len(vDNA[0]), len(vDNA[0][0]))
