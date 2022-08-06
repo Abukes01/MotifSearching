@@ -7,9 +7,7 @@ by vectorising the functions and running them in parallel on CUDA capable GPUs o
 import os
 import sys
 import time
-import numba
 import numpy as np
-import re
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
