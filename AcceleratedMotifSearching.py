@@ -8,6 +8,8 @@ import os
 import sys
 import time
 import numpy as np
+from numpy.typing import NDArray
+from multiprocessing import Process
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
@@ -113,10 +115,10 @@ def vectoriseSequences(k: int, sequences: list):
     Takes a list of sequences and returns an array of arrays, containing k-length pieces of sequences from beginning to
     end shifting by one nucleotide. Nucleotides are encoded numerically as follows:
 
-    A -> 0
-    T -> 1
-    G -> 2
-    C -> 3
+    A -> 1
+    T -> 2
+    G -> 3
+    C -> 4
 
     This is cruicial information for decoding the outcome sequences for further processing.
 
@@ -137,29 +139,43 @@ def vectoriseSequences(k: int, sequences: list):
 
 
 def unvectorise(vectorToConvert):
-    pattern = ''
-    for nucleotide in vectorToConvert:
-        pattern += unConversionDict[nucleotide]
-    return pattern
+    return ''.join([unConversionDict[nucleotide] for nucleotide in vectorToConvert])
 
 
-def vectorEnumerateMotifs(vDNA, searchPatterns: np.typing.NDArray, d: int, subprocessID: int):
+def makeSearchPatterns(refSeq: NDArray, splits: int):
+    parts = len(refSeq) // splits
+    return np.array_split(refSeq, parts)
+
+
+def vectorEnumerateMotifs(vDNA, searchPatterns: NDArray, d: int, subprocessID: int, saveList: list):
     patterns_part = []
+    sequence_id = 0
     for sequence in vDNA:
+        sequence_id += 1
         # for k-mer in refSeq
         for index, pattern in enumerate(searchPatterns):
             patterns_part.append([])
-            print(f"[Worker {subprocessID}] Comparing {index + 1}/{len(searchPatterns)}")
+            print(
+                f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
             # for pattern' differing from pattern by at most d mismatches
             for patternPrime in sequence:
                 patternDiff = patternPrime - pattern
                 if np.count_nonzero(patternDiff) <= d:
                     patterns_part[index].append(patternPrime)
-    return patterns_part
+    saveList.append(patterns_part)
 
 
 if __name__ == '__main__':
+
     DNA = readSequences(0, 0)
     vDNA = vectoriseSequences(15, DNA)
     # print("Normal sequence:", DNA, len(DNA[0]))
     # print("Vectorised sequence:", vDNA, len(vDNA), len(vDNA[0]), len(vDNA[0][0]))
+    foundPatterns = []
+    processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, 5, ID, foundPatterns)) for ID, patterns in
+                 enumerate(makeSearchPatterns(vDNA[0], 250))]
+
+    for p in processes:
+        p.start()
+    for p in processes:
+        p.join()
