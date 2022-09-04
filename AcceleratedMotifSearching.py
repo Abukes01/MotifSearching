@@ -5,6 +5,7 @@ by vectorising the functions and running them in parallel on CUDA capable GPUs o
 
 ## Imports
 import os
+import json
 import sys
 import time
 import numpy as np
@@ -147,42 +148,79 @@ def makeSearchPatterns(refSeq: NDArray, splits: int):
     return np.array_split(refSeq, parts)
 
 
-def vectorEnumerateMotifs(vDNA, searchPatterns: NDArray, d: int, subprocessID: int, saveList: list):
-    patterns_part = []
+def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subprocessID: int,
+                          saveDict: dict):
+    print(f"[Worker {subprocessID}]: Initializing")
+    patternsDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}
+    print(f"[Worker {subprocessID}]: Initialized, starting work. Displaying debug info every 100 patterns analysed.")
     sequence_id = 0
     for sequence in vDNA:
         sequence_id += 1
         # for k-mer in refSeq
         for index, pattern in enumerate(searchPatterns):
-            #start = time.perf_counter()
-            patterns_part.append([])
-            print(
-               f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
+            start = time.perf_counter()
+            if index % 100 == 0:
+                print(
+                    f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
             # for pattern' differing from pattern by at most d mismatches
             for patternPrime in sequence:
                 patternDiff = patternPrime - pattern
                 if np.count_nonzero(patternDiff) <= d:
-                    patterns_part[index].append(patternPrime)
-            #stop = time.perf_counter()
-            #print(f"[Worker {subprocessID}]: Comparing took {stop - start} seconds")
-    saveList.append(patterns_part)
+                    patternsDict_part[unvectorise(searchPatterns[index])].append(unvectorise(patternPrime))
+            stop = time.perf_counter()
+            print(f"[Worker {subprocessID}]: Comparing took {stop - start} seconds")
+    saveDict.update(patternsDict_part)
+
+
+def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, patternDict: dict,
+                                       workerID: int):
+    patternDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}  # pattern set
+    # for patterns array in vDNA
+    for sequenceID, sequence in enumerate(vDNA):
+        # for each pattern in sequence
+        for patternIndex, pattern in enumerate(sequence):
+            if patternIndex % 100 == 0:
+                print(
+                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(searchPatterns)} in sequence {sequenceID + 1}/{len(vDNA)}")
+            # create an array of length same as ref sequence repeating the compared pattern
+            patternarray = np.tile(pattern, [len(searchPatterns), 1])
+            # subtract the reference array and the constructed array of pattern repeats from one another
+            comparisonarray = searchPatterns - patternarray
+            # iterate over the subtraction result and add to dictionary only the results whose mismatches are <= d
+            for i, patternPrime in enumerate(comparisonarray):
+                if np.count_nonzero(patternPrime) <= d:
+                    patternDict_part[unvectorise(searchPatterns[patternIndex])].append(unvectorise(sequence[i]))
+    patternDict.update(patternDict_part)
+
+
+def createJSON(patternsDict, k, d):
+    if not os.path.isdir('./motifs'):
+        os.mkdir('./motifs')
+    with open(f'./motifs/({k},{d})-motifs.json', 'w') as m:
+        json.dump(patternsDict, m)
+    createdFile = f'({k},{d})-motifs.json'
+    return patternsDict, createdFile
 
 
 if __name__ == '__main__':
+    k, d = 15, 5
     DNA = readSequences(0, 0)
-    vDNA = vectoriseSequences(15, DNA)
+    vDNA = vectoriseSequences(k, DNA)
+
 
     def PoolProcessing(workers):
-        foundPatterns = []
+        foundPatterns = dict()
         with Pool(workers) as p:
-            p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, 5, ID, foundPatterns) for ID, patterns in
+            p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, d, ID, foundPatterns) for ID, patterns in
                                               enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+        createJSON(foundPatterns, k, d)
 
 
     def ManualProcessing(workers):
-        foundPatterns = []
+        foundPatterns = dict()
 
-        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, 5, ID, foundPatterns)) for ID, patterns
+        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, d, ID, foundPatterns)) for
+                     ID, patterns
                      in
                      enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
 
@@ -190,6 +228,16 @@ if __name__ == '__main__':
             p.start()
         for p in processes:
             p.join()
+        createJSON(foundPatterns, k, d)
+
+
+    def ArraySubtractionMultiprocessing(workers):
+        foundPatterns = dict()
+        with Pool(workers) as p:
+            p.starmap(bigArraySubtractionMotifComparison,
+                      [(vDNA, searchPatterns, d, foundPatterns, ID) for ID, searchPatterns in
+                       enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+        createJSON(foundPatterns, k, d)
 
 
     run = True
@@ -197,7 +245,8 @@ if __name__ == '__main__':
         try:
             print("Choose the multiprocessing implementation to run the code with:\n"
                   "[1] Pool\n"
-                  "[2] Processes")
+                  "[2] Processes\n"
+                  "[3] Array subtraction method")
             i1 = int(input("?>> "))
             if i1 == 1:
                 print("Input the desired number of workers to initialize:\n"
@@ -212,7 +261,13 @@ if __name__ == '__main__':
                 workers = int(input("?>> "))
                 run = False
                 ManualProcessing(workers)
-
+            elif i1 == 3:
+                print("Input the desired number of workers to initialize:\n"
+                      "(The number must be less than 60, it's recommended to use the number of cores available in system)")
+                workers = int(input("?>> "))
+                run = False
+                print(f"Initializing process on {workers} workers")
+                ArraySubtractionMultiprocessing(workers)
             else:
                 raise ValueError
         except ValueError:
