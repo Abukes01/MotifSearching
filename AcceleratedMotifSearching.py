@@ -9,7 +9,7 @@ import sys
 import time
 import numpy as np
 from numpy.typing import NDArray
-from multiprocessing import Process
+from multiprocessing import Process, Pool
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
@@ -18,7 +18,7 @@ unConversionDict = {1: "A", 2: "T", 3: "G", 4: "C"}
 
 
 # Load data as plaintext and save all sequences into a separate file (same as in normal program)
-# This is relatively fast compared to the rest of the algorithms, and I'm a little bit too lazy to change already
+# This is relatively fast compared to the rest of the algorithms, and I'm a little too lazy to change already
 # proven to work code. If anyone wishes to optimize it, go for it, just make sure it works as intended :)
 def readSequences(linestart: int, linestop: int, all=True):
     """
@@ -120,7 +120,7 @@ def vectoriseSequences(k: int, sequences: list):
     G -> 3
     C -> 4
 
-    This is cruicial information for decoding the outcome sequences for further processing.
+    This is crucial information for decoding the outcome sequences for further processing.
 
     :param k: (Integer) Defines the length of a k-mer in vectorised sequences
     :param sequences: (List) The list of sequences to vectorise
@@ -154,28 +154,66 @@ def vectorEnumerateMotifs(vDNA, searchPatterns: NDArray, d: int, subprocessID: i
         sequence_id += 1
         # for k-mer in refSeq
         for index, pattern in enumerate(searchPatterns):
+            #start = time.perf_counter()
             patterns_part.append([])
-            print(
-                f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
+            #print(
+            #    f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
             # for pattern' differing from pattern by at most d mismatches
             for patternPrime in sequence:
                 patternDiff = patternPrime - pattern
                 if np.count_nonzero(patternDiff) <= d:
                     patterns_part[index].append(patternPrime)
+            #stop = time.perf_counter()
+            #print(f"[Worker {subprocessID}]: Comparing took {stop - start} seconds")
     saveList.append(patterns_part)
 
 
 if __name__ == '__main__':
-
     DNA = readSequences(0, 0)
     vDNA = vectoriseSequences(15, DNA)
-    # print("Normal sequence:", DNA, len(DNA[0]))
-    # print("Vectorised sequence:", vDNA, len(vDNA), len(vDNA[0]), len(vDNA[0][0]))
-    foundPatterns = []
-    processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, 5, ID, foundPatterns)) for ID, patterns in
-                 enumerate(makeSearchPatterns(vDNA[0], 250))]
 
-    for p in processes:
-        p.start()
-    for p in processes:
-        p.join()
+    def PoolProcessing(workers):
+        foundPatterns = []
+        with Pool(workers) as p:
+            p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, 5, ID, foundPatterns) for ID, patterns in
+                                              enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+
+
+    def ManualProcessing(workers):
+        foundPatterns = []
+
+        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, 5, ID, foundPatterns)) for ID, patterns
+                     in
+                     enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
+
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
+
+
+    run = True
+    while run:
+        try:
+            print("Choose the multiprocessing implementation to run the code with:\n"
+                  "[1] Pool\n"
+                  "[2] Processes")
+            i1 = int(input("?>> "))
+            if i1 == 1:
+                print("Input the desired number of workers to initialize:\n"
+                      "(The number must be less than 60, it's recommended to use the number of cores available in system)")
+                workers = int(input("?>> "))
+                run = False
+                PoolProcessing(workers)
+
+            elif i1 == 2:
+                print("Input the desired number of workers to initialize:\n"
+                      "(It's recommended to use the number of cores available in system)")
+                workers = int(input("?>> "))
+                run = False
+                ManualProcessing(workers)
+
+            else:
+                raise ValueError
+        except ValueError:
+            print("The input was incorrect, please use valid integers.")
