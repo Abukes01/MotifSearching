@@ -156,8 +156,8 @@ def vectorEnumerateMotifs(vDNA, searchPatterns: NDArray, d: int, subprocessID: i
         for index, pattern in enumerate(searchPatterns):
             #start = time.perf_counter()
             patterns_part.append([])
-            #print(
-            #    f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
+            print(
+               f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
             # for pattern' differing from pattern by at most d mismatches
             for patternPrime in sequence:
                 patternDiff = patternPrime - pattern
