@@ -10,7 +10,9 @@ import sys
 import time
 import numpy as np
 from numpy.typing import NDArray
-from multiprocessing import Process, Pool
+from multiprocessing import Process, Pool, set_start_method
+
+set_start_method("spawn")
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
