@@ -12,7 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 from multiprocessing import Process, Pool, set_start_method
 
-set_start_method("spawn")
+
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
@@ -205,6 +205,7 @@ def createJSON(patternsDict, k, d):
 
 
 if __name__ == '__main__':
+    set_start_method("spawn")
     k, d = 15, 5
     DNA = readSequences(0, 0)
     vDNA = vectoriseSequences(k, DNA)
