@@ -233,10 +233,19 @@ if __name__ == '__main__':
 
     def ArraySubtractionMultiprocessing(workers):
         foundPatterns = dict()
-        with Pool(workers) as p:
-            p.starmap(bigArraySubtractionMotifComparison,
-                      [(vDNA, searchPatterns, d, foundPatterns, ID) for ID, searchPatterns in
-                       enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+        processes = [
+            Process(target=bigArraySubtractionMotifComparison, args=(vDNA, searchPatterns, d, foundPatterns, ID)) for
+            ID, searchPatterns in
+            enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
+
+        for p in processes:
+            p.start()
+        for p in processes:
+            p.join()
+        # with Pool(workers) as p:
+        #     p.starmap(bigArraySubtractionMotifComparison,
+        #               [(vDNA, searchPatterns, d, foundPatterns, ID) for ID, searchPatterns in
+        # enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
         createJSON(foundPatterns, k, d)
 
 
