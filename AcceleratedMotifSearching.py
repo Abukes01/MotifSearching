@@ -12,8 +12,6 @@ import numpy as np
 from numpy.typing import NDArray
 from multiprocessing import Process, Pool, set_start_method
 
-
-
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
 conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4}
@@ -150,8 +148,7 @@ def makeSearchPatterns(refSeq: NDArray, splits: int):
     return np.array_split(refSeq, parts)
 
 
-def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subprocessID: int,
-                          saveDict: dict):
+def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subprocessID: int):
     print(f"[Worker {subprocessID}]: Initializing")
     patternsDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}
     print(f"[Worker {subprocessID}]: Initialized, starting work. Displaying debug info every 100 patterns analysed.")
@@ -171,10 +168,10 @@ def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subpro
                     patternsDict_part[unvectorise(searchPatterns[index])].append(unvectorise(patternPrime))
             stop = time.perf_counter()
             print(f"[Worker {subprocessID}]: Comparing took {stop - start} seconds")
-    saveDict.update(patternsDict_part)
+    return patternsDict_part
 
 
-def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, patternDict: dict,
+def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int,
                                        workerID: int):
     patternDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}  # pattern set
     # for patterns array in vDNA
@@ -183,7 +180,7 @@ def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d
         for patternIndex, pattern in enumerate(sequence):
             if patternIndex % 100 == 0:
                 print(
-                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(searchPatterns)} in sequence {sequenceID + 1}/{len(vDNA)}")
+                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
             # create an array of length same as ref sequence repeating the compared pattern
             patternarray = np.tile(pattern, [len(searchPatterns), 1])
             # subtract the reference array and the constructed array of pattern repeats from one another
@@ -191,12 +188,13 @@ def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d
             # iterate over the subtraction result and add to dictionary only the results whose mismatches are <= d
             for i, patternPrime in enumerate(comparisonarray):
                 if np.count_nonzero(patternPrime) <= d:
-                    patternDict_part[unvectorise(searchPatterns[patternIndex])].append(unvectorise(sequence[i]))
+                    patternDict_part[unvectorise(searchPatterns[i])].append(unvectorise(pattern))
             # memory cleanup
             del patternarray
             del comparisonarray
-    # update the provided dictionary with results
-    patternDict.update(patternDict_part)
+    # print(f"Worker {workerID} returned patterns:"
+    #       f"{patternDict_part}")
+    return patternDict_part
 
 
 def createJSON(patternsDict, k, d):
@@ -218,15 +216,18 @@ if __name__ == '__main__':
     def PoolProcessing(workers):
         foundPatterns = dict()
         with Pool(workers) as p:
-            p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, d, ID, foundPatterns) for ID, patterns in
-                                              enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+            results = p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, d, ID) for ID, patterns in
+                                                        enumerate(
+                                                            makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+            for resultDict in results:
+                foundPatterns.update(resultDict)
         createJSON(foundPatterns, k, d)
 
 
     def ManualProcessing(workers):
         foundPatterns = dict()
 
-        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, d, ID, foundPatterns)) for
+        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, d, ID)) for
                      ID, patterns
                      in
                      enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
@@ -240,19 +241,12 @@ if __name__ == '__main__':
 
     def ArraySubtractionMultiprocessing(workers):
         foundPatterns = dict()
-        processes = [
-            Process(target=bigArraySubtractionMotifComparison, args=(vDNA, searchPatterns, d, foundPatterns, ID)) for
-            ID, searchPatterns in
-            enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
-
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
-        # with Pool(workers) as p:
-        #     p.starmap(bigArraySubtractionMotifComparison,
-        #               [(vDNA, searchPatterns, d, foundPatterns, ID) for ID, searchPatterns in
-        # enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+        with Pool(workers) as p:
+            results = p.starmap(bigArraySubtractionMotifComparison,
+                                [(vDNA, searchPatterns, d, ID) for ID, searchPatterns in
+                                 enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+            for resultDict in results:
+                foundPatterns.update(resultDict)
         createJSON(foundPatterns, k, d)
 
 
