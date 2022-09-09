@@ -192,6 +192,10 @@ def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d
             for i, patternPrime in enumerate(comparisonarray):
                 if np.count_nonzero(patternPrime) <= d:
                     patternDict_part[unvectorise(searchPatterns[patternIndex])].append(unvectorise(sequence[i]))
+            # memory cleanup
+            del patternarray
+            del comparisonarray
+    # update the provided dictionary with results
     patternDict.update(patternDict_part)
 
 
