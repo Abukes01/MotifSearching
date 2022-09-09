@@ -177,18 +177,18 @@ def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d
     # for patterns array in vDNA
     for sequenceID, sequence in enumerate(vDNA):
         # for each pattern in sequence
-        for patternIndex, pattern in enumerate(sequence):
+        for patternIndex, pattern in enumerate(searchPatterns):
             if patternIndex % 100 == 0:
                 print(
-                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
+                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(searchPatterns)} in sequence {sequenceID + 1}/{len(vDNA)}")
             # create an array of length same as ref sequence repeating the compared pattern
-            patternarray = np.tile(pattern, [len(searchPatterns), 1])
+            patternarray = np.tile(pattern, [len(sequence), 1])
             # subtract the reference array and the constructed array of pattern repeats from one another
-            comparisonarray = searchPatterns - patternarray
+            comparisonarray = sequence - patternarray
             # iterate over the subtraction result and add to dictionary only the results whose mismatches are <= d
             for i, patternPrime in enumerate(comparisonarray):
                 if np.count_nonzero(patternPrime) <= d:
-                    patternDict_part[unvectorise(searchPatterns[i])].append(unvectorise(pattern))
+                    patternDict_part[unvectorise(searchPatterns[patternIndex])].append(unvectorise(sequence[i]))
             # memory cleanup
             del patternarray
             del comparisonarray
@@ -209,7 +209,7 @@ def createJSON(patternsDict, k, d):
 if __name__ == '__main__':
     set_start_method("spawn")
     k, d = 15, 5
-    DNA = readSequences(0, 0)
+    DNA = readSequences(0, 200, all=False)
     vDNA = vectoriseSequences(k, DNA)
 
 
