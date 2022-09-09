@@ -10,7 +10,7 @@ import sys
 import time
 import numpy as np
 from numpy.typing import NDArray
-from multiprocessing import Process, Pool, set_start_method
+from multiprocessing import Pool, set_start_method
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
@@ -178,7 +178,10 @@ def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d
     for sequenceID, sequence in enumerate(vDNA):
         # for each pattern in sequence
         for patternIndex, pattern in enumerate(searchPatterns):
-            if patternIndex % 100 == 0:
+            if patternIndex % 10 == 0 and patternIndex != 0:
+                print(
+                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(searchPatterns)} in sequence {sequenceID + 1}/{len(vDNA)}")
+            elif patternIndex==0:
                 print(
                     f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(searchPatterns)} in sequence {sequenceID + 1}/{len(vDNA)}")
             # create an array of length same as ref sequence repeating the compared pattern
@@ -209,7 +212,7 @@ def createJSON(patternsDict, k, d):
 if __name__ == '__main__':
     set_start_method("spawn")
     k, d = 15, 5
-    DNA = readSequences(0, 200, all=False)
+    DNA = readSequences(0, 200, all=True)
     vDNA = vectoriseSequences(k, DNA)
 
 
@@ -221,21 +224,6 @@ if __name__ == '__main__':
                                                             makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
             for resultDict in results:
                 foundPatterns.update(resultDict)
-        createJSON(foundPatterns, k, d)
-
-
-    def ManualProcessing(workers):
-        foundPatterns = dict()
-
-        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, d, ID)) for
-                     ID, patterns
-                     in
-                     enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
-
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
         createJSON(foundPatterns, k, d)
 
 
@@ -255,8 +243,7 @@ if __name__ == '__main__':
         try:
             print("Choose the multiprocessing implementation to run the code with:\n"
                   "[1] Pool\n"
-                  "[2] Processes\n"
-                  "[3] Array subtraction method")
+                  "[2] Array subtraction method")
             i1 = int(input("?>> "))
             if i1 == 1:
                 print("Input the desired number of workers to initialize:\n"
@@ -266,12 +253,6 @@ if __name__ == '__main__':
                 PoolProcessing(workers)
 
             elif i1 == 2:
-                print("Input the desired number of workers to initialize:\n"
-                      "(It's recommended to use the number of cores available in system)")
-                workers = int(input("?>> "))
-                run = False
-                ManualProcessing(workers)
-            elif i1 == 3:
                 print("Input the desired number of workers to initialize:\n"
                       "(The number must be less than 60, it's recommended to use the number of cores available in system)")
                 workers = int(input("?>> "))
