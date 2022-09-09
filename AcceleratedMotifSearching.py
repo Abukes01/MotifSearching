@@ -213,7 +213,9 @@ if __name__ == '__main__':
     set_start_method("spawn")
     k, d = 15, 5
     DNA = readSequences(0, 200, all=True)
+    print("Reading data complete, vectorising...")
     vDNA = vectoriseSequences(k, DNA)
+    print("Vectorisation complete!")
 
 
     def PoolProcessing(workers):
