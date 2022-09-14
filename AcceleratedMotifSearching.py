@@ -14,8 +14,8 @@ from multiprocessing import Process, Pool, set_start_method
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
-conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4}
-unConversionDict = {1: "A", 2: "T", 3: "G", 4: "C"}
+conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4, "N": 0}
+unConversionDict = {1: "A", 2: "T", 3: "G", 4: "C", 0: "N"}
 
 
 # Load data as plaintext and save all sequences into a separate file (same as in normal program)
@@ -191,9 +191,6 @@ def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d
             for i, patternPrime in enumerate(comparisonarray):
                 if np.count_nonzero(patternPrime) <= d:
                     patternDict_part[unvectorise(searchPatterns[i])].append(unvectorise(pattern))
-            # memory cleanup
-            del patternarray
-            del comparisonarray
     # print(f"Worker {workerID} returned patterns:"
     #       f"{patternDict_part}")
     return patternDict_part
@@ -210,76 +207,86 @@ def createJSON(patternsDict, k, d):
 
 if __name__ == '__main__':
     set_start_method("spawn")
-    k, d = 15, 5
     DNA = readSequences(0, 200, True)
-    vDNA = vectoriseSequences(k, DNA)
 
 
-    def PoolProcessing(workers):
+    def PoolProcessing(workers, searchPatterns):
         foundPatterns = dict()
         with Pool(workers) as p:
             results = p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, d, ID) for ID, patterns in
-                                                        enumerate(
-                                                            makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+                                                        enumerate(searchPatterns)])
             for resultDict in results:
                 foundPatterns.update(resultDict)
         createJSON(foundPatterns, k, d)
 
 
-    def ManualProcessing(workers):
-        foundPatterns = dict()
-
-        processes = [Process(target=vectorEnumerateMotifs, args=(vDNA, patterns, d, ID)) for
-                     ID, patterns
-                     in
-                     enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))]
-
-        for p in processes:
-            p.start()
-        for p in processes:
-            p.join()
-        createJSON(foundPatterns, k, d)
-
-
-    def ArraySubtractionMultiprocessing(workers):
+    def ArraySubtractionMultiprocessing(workers, searchPatterns):
         foundPatterns = dict()
         with Pool(workers) as p:
             results = p.starmap(bigArraySubtractionMotifComparison,
                                 [(vDNA, searchPatterns, d, ID) for ID, searchPatterns in
-                                 enumerate(makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers))])
+                                 enumerate(searchPatterns)])
             for resultDict in results:
                 foundPatterns.update(resultDict)
         createJSON(foundPatterns, k, d)
 
 
-    run = True
-    while run:
+    initparam = False
+    while 1:
         try:
+            if not initparam:
+                while 1:
+                    try:
+                        print("Input the desired length of mers.")
+                        k = int(input("k = ? >> "))
+                        print("Input the desired maximum number of mismatches.")
+                        d = int(input("d = ? >> "))
+                        initparam = True
+                        break
+                    except ValueError:
+                        print("Invalid values have been input. Please use valid integers")
+
+            print(f"Initializing and vectorising sequeces with k={k}, d={d}")
+            vDNA = vectoriseSequences(k, DNA)
+            print("Initialized! Continuing...\n")
+
             print("Choose the multiprocessing implementation to run the code with:\n"
                   "[1] Pool\n"
-                  "[2] Processes\n"
-                  "[3] Array subtraction method")
+                  "[2] Array subtraction method")
             i1 = int(input("?>> "))
             if i1 == 1:
                 print("Input the desired number of workers to initialize:\n"
                       "(The number must be less than 60, it's recommended to use the number of cores available in system)")
                 workers = int(input("?>> "))
-                run = False
-                PoolProcessing(workers)
-
+                print(
+                    "Do you wish to search for patterns in the first sequence in the 'sequences' folder or to specify your own pattern(s)? [Y/N]")
+                i2 = input("?>> ")
+                if i2 in ["Y", "y", '']:
+                    searchPatterns = makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers)
+                elif i2 in ["N", "n"]:
+                    print("Please input desired patterns to search for, separated by spaces.")
+                    initSearchPatterns = input("?>> ").upper().split()
+                    searchPatterns = np.array(
+                        [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
+                PoolProcessing(workers, searchPatterns)
+                break
             elif i1 == 2:
-                print("Input the desired number of workers to initialize:\n"
-                      "(It's recommended to use the number of cores available in system)")
-                workers = int(input("?>> "))
-                run = False
-                ManualProcessing(workers)
-            elif i1 == 3:
                 print("Input the desired number of workers to initialize:\n"
                       "(The number must be less than 60, it's recommended to use the number of cores available in system)")
                 workers = int(input("?>> "))
-                run = False
+                print(
+                    "Do you wish to search for patterns in the first sequence in the 'sequences' folder or to specify your own pattern(s)? [Y/N]")
+                i2 = input("?>> ")
+                if i2 in ["Y", "y", '']:
+                    searchPatterns = makeSearchPatterns(vDNA[0], len(vDNA[0]) // workers)
+                elif i2 in ["N", "n"]:
+                    print("Please input desired patterns to search for, separated by spaces.")
+                    initSearchPatterns = input("?>> ").upper().split()
+                    searchPatterns = np.array(
+                        [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
                 print(f"Initializing process on {workers} workers")
-                ArraySubtractionMultiprocessing(workers)
+                ArraySubtractionMultiprocessing(workers, searchPatterns)
+                break
             else:
                 raise ValueError
         except ValueError:
