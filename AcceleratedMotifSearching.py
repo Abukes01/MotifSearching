@@ -172,8 +172,6 @@ def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subpro
 
 
 def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
-    print(searchPatterns)
-    print(len(searchPatterns))
     patternDict_part = {''.join([unConversionDict[nuc] for nuc in refPattern]): [] for refPattern in searchPatterns}  # pattern set
     # for patterns array in vDNA
     for sequenceID, sequence in enumerate(vDNA):
