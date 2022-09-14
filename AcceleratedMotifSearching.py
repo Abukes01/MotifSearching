@@ -268,6 +268,10 @@ if __name__ == '__main__':
                     initSearchPatterns = input("?>> ").upper().split()
                     searchPatterns = np.array(
                         [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
+                    if len(searchPatterns) <= workers:
+                        searchPatterns = np.tile(searchPatterns, [workers,1])
+                    else:
+                        searchPatterns = np.array_split(searchPatterns, workers)
                 PoolProcessing(workers, searchPatterns)
                 break
             elif i1 == 2:
@@ -284,6 +288,10 @@ if __name__ == '__main__':
                     initSearchPatterns = input("?>> ").upper().split()
                     searchPatterns = np.array(
                         [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
+                    if len(searchPatterns) <= workers:
+                        searchPatterns = np.tile(searchPatterns, [workers,1])
+                    else:
+                        searchPatterns = np.array_split(searchPatterns, workers)
                 print(f"Initializing process on {workers} workers")
                 ArraySubtractionMultiprocessing(workers, searchPatterns)
                 break
