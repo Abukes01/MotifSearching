@@ -172,7 +172,9 @@ def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subpro
 
 
 def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
-    patternDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}  # pattern set
+    print(searchPatterns)
+    print(len(searchPatterns))
+    patternDict_part = {''.join([unConversionDict[nuc] for nuc in refPattern]): [] for refPattern in searchPatterns}  # pattern set
     # for patterns array in vDNA
     for sequenceID, sequence in enumerate(vDNA):
         # for each pattern in sequence
@@ -266,10 +268,14 @@ if __name__ == '__main__':
                 elif i2 in ["N", "n"]:
                     print("Please input desired patterns to search for, separated by spaces.")
                     initSearchPatterns = input("?>> ").upper().split()
-                    searchPatterns = np.array(
-                        [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
+                    if len(initSearchPatterns) == 1:
+                        searchPatterns = np.array(
+                            [[np.array([conversionDict[nuc] for nuc in pattern])] for pattern in initSearchPatterns])
+                    else:
+                        searchPatterns = np.array(
+                            [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
                     if len(searchPatterns) <= workers:
-                        searchPatterns = np.tile(searchPatterns, [workers,1])
+                        searchPatterns = np.tile(searchPatterns, [workers, 1])
                     else:
                         searchPatterns = np.array_split(searchPatterns, workers)
                 PoolProcessing(workers, searchPatterns)
@@ -286,8 +292,12 @@ if __name__ == '__main__':
                 elif i2 in ["N", "n"]:
                     print("Please input desired patterns to search for, separated by spaces.")
                     initSearchPatterns = input("?>> ").upper().split()
-                    searchPatterns = np.array(
-                        [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
+                    if len(initSearchPatterns) == 1:
+                        searchPatterns = np.array(
+                            [[np.array([conversionDict[nuc] for nuc in pattern])] for pattern in initSearchPatterns])
+                    else:
+                        searchPatterns = np.array(
+                            [np.array([conversionDict[nuc] for nuc in pattern]) for pattern in initSearchPatterns])
                     if len(searchPatterns) <= workers:
                         searchPatterns = np.tile(searchPatterns, [workers,1])
                     else:
