@@ -128,75 +128,118 @@ def vectoriseSequences(k: int, sequences: list):
     :return: An array of arrays containing k-length numerically encoded pieces of given sequences in appropriate order.
     """
 
-    numDNA = []
-    for sequence in sequences:
-        numSequence = []
-        for nucleotide in sequence.strip('\n'):
-            numSequence.append(conversionDict[nucleotide])
-        numDNA.append(np.array(numSequence))
-    numDNA = np.array(numDNA)
+    numDNA = [] # Define starting list for vectorisation
+    for sequence in sequences: # For each sequence in sequences
+        numSequence = [] # Define a temporary list for appending conversion outcome
+        for nucleotide in sequence.strip('\n'): # For each nucleotide in given sequence without newlines
+            numSequence.append(conversionDict[nucleotide]) # Append the converted nucleotide number to temporary list
+        numDNA.append(np.array(numSequence)) # Change the list to NumPy Array
+    numDNA = np.array(numDNA) # Change whole converted sequences list to an array
+    # EG. k=5 ['ATGCCGTAGTTAGGACT'] -> [1, 2, 3, 4, 4, 3, 2, 1, 3, 2, 2, 1, 3, 3, 1, 4, 2]
 
-    return np.array([[numSequence[i:i + k] for i in range(len(numSequence) - k)] for numSequence in numDNA])
+    # Return an array containing fragmented k-length pieces of sequences in appropriate order
+    # EG. k=5 [1, 2, 3, 4, 4, 3, 2, 1, 3, 2, 2, 1, 3, 3, 1, 4, 2] ->
+    # [
+    #  [1, 2, 3, 4, 4],
+    #  [2, 3, 4, 4, 3], [3, 4, 4, 3, 2], [4, 4, 3, 2, 1], [4, 3, 2, 1, 3], [3, 2, 1, 3, 2], [2, 1, 3, 2, 2],
+    #  [1, 3, 2, 2, 1], [3, 2, 2, 1, 3], [2, 2, 1, 3, 3], [2, 1, 3, 3, 1], [1, 3, 3, 1, 4], [3, 3, 1, 4, 2]
+    # ]
+    return np.array([[numSequence[i:i + k] for i in range(len(numSequence) - (k-1))] for numSequence in numDNA])
 
 
-def unvectorise(vectorToConvert):
+def unvectorise(vectorToConvert): # Reverse the process of vectorisation for given vector
     return ''.join([unConversionDict[nucleotide] for nucleotide in vectorToConvert])
 
 
 def makeSearchPatterns(refSeq: NDArray, splits: int):
+    '''
+    Return a partitioned array of patterns to send out ot subprocesses
+    :param refSeq: Reference sequence to partition
+    :param splits: How many resulting splits are to be returned
+    :return: A partitioned array of patterns to send out ot subprocesses
+    '''
     parts = len(refSeq) // splits
     return np.array_split(refSeq, parts)
 
 
 def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subprocessID: int):
+    '''
+    One-by-one Brute-force motif enumeration comparing vector differences of given array elements
+    :param vDNA: Vectorised DNA sequences
+    :param searchPatterns: Patterns which will be searched through in the sequeences
+    :param d: Number of mismatches that may occur in the motifs to be classified as proper
+    :param subprocessID: ID of subprocess/rank (mainly for debugging)
+    :return: A part of the final pattern dictionary
+    '''
     print(f"[Worker {subprocessID}]: Initializing")
+    # Initialize a dictionary for all patterns to append found motifs to
     patternsDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}
     print(f"[Worker {subprocessID}]: Initialized, starting work. Displaying debug info every 100 patterns analysed.")
-    sequence_id = 0
+    sequence_id = 0 # Initialize the sequence counter
     for sequence in vDNA:
-        sequence_id += 1
-        # for k-mer in refSeq
-        for index, pattern in enumerate(searchPatterns):
+        sequence_id += 1 # For each sequence went through increment ID by 1
+        # For each k-mer in refSeq
+        for index, k_mer in enumerate(searchPatterns):
             start = time.perf_counter()
+            # Print verbose progress every 100 k-mers
             if index % 100 == 0:
                 print(
                     f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
-            # for pattern' differing from pattern by at most d mismatches
-            for patternPrime in sequence:
-                patternDiff = patternPrime - pattern
+            # for k_mer' in sequence
+            for k_merPrime in sequence:
+                # Calculate the difference in k-mers
+                patternDiff = k_merPrime - k_mer
+                # If 0difference count is less or equal to mismatch threshold
                 if np.count_nonzero(patternDiff) <= d:
-                    patternsDict_part[unvectorise(searchPatterns[index])].append(unvectorise(patternPrime))
+                    # Append found proper k-mer to appropriate dictionary entry
+                    patternsDict_part[unvectorise(searchPatterns[index])].append(unvectorise(k_merPrime))
             stop = time.perf_counter()
             print(f"[Worker {subprocessID}]: Comparing took {stop - start} seconds")
+    # Return the resulting dictionary of patterns
     return patternsDict_part
 
 
 def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
-    patternDict_part = {''.join([unConversionDict[nuc] for nuc in refPattern]): [] for refPattern in searchPatterns}  # pattern set
-    # for patterns array in vDNA
+    '''
+    Faster method of brute-force motif enumeration utilizing array subtraction and result comparison
+    :param vDNA: Vectorised DNA sequences
+    :param searchPatterns: Patterns which will be searched through in the sequeences
+    :param d: Number of mismatches that may occur in the motifs to be classified as proper
+    :param workerID: ID of subprocess/rank (mainly for debugging)
+    :return: A part of the final pattern dictionary
+    '''
+    # Initialize the dictionary for found proper patterns to be appended into
+    patternDict_part = {''.join([unConversionDict[nuc] for nuc in refPattern]): [] for refPattern in searchPatterns}
+    # For each sequence in vDNA
     for sequenceID, sequence in enumerate(vDNA):
-        # for each pattern in sequence
+        # For each pattern in sequence
         for patternIndex, pattern in enumerate(sequence):
+            # Print verbose progress every 100 k-mers
             if patternIndex % 100 == 0 and patternIndex != 0:
                 print(
                     f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
             elif patternIndex == 0:
                 print(
                     f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
-            # create an array of length same as ref sequence repeating the compared pattern
+            # Create a pattern (motif) array of length same as reference sequence repeating the compared pattern (motif)
             patternarray = np.tile(pattern, [len(searchPatterns), 1])
-            # subtract the reference array and the constructed array of pattern repeats from one another
+            # Subtract the reference array and the constructed pattern (motif) array from one another
             comparisonarray = searchPatterns - patternarray
-            # iterate over the subtraction result and add to dictionary only the results whose mismatches are <= d
+            # Iterate over the subtraction result and add only the results whose mismatches are <= d to dictionary
             for i, patternPrime in enumerate(comparisonarray):
                 if np.count_nonzero(patternPrime) <= d:
                     patternDict_part[unvectorise(searchPatterns[i])].append(unvectorise(pattern))
-    # print(f"Worker {workerID} returned patterns:"
-    #       f"{patternDict_part}")
     return patternDict_part
 
 
 def createJSON(patternsDict, k, d):
+    '''
+    Write out program results in JSON format
+    :param patternsDict: Dictionary to write out into the file
+    :param k: k-length of searched motifs
+    :param d: mismatch threshold of searched motifs
+    :return: Pass-through dictionary of patterns and name of created file
+    '''
     if not os.path.isdir('./motifs'):
         os.mkdir('./motifs')
     with open(f'./motifs/({k},{d})-motifs.json', 'w') as m:
@@ -206,6 +249,9 @@ def createJSON(patternsDict, k, d):
 
 
 if __name__ == '__main__':
+
+    # PROGRAM ENGINE, TO BE REWRITTEN
+
     set_start_method("spawn")
     DNA = readSequences(0, 200, True)
 
