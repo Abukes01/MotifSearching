@@ -220,16 +220,6 @@ def programInit(lineStart, lineStop, k, all=False):
 def MPIRun():
     #                           OLD MULTITHREADED IMPLEMENTATION FOR REFERENCE
     #
-    # def PoolProcessing(workers, searchPatterns):
-    #     foundPatterns = dict()
-    #     with Pool(workers) as p:
-    #         results = p.starmap(vectorEnumerateMotifs, [(vDNA, patterns, d, ID) for ID, patterns in
-    #                                                     enumerate(searchPatterns)])
-    #         for resultDict in results:
-    #             foundPatterns.update(resultDict)
-    #     createJSON(foundPatterns, k, d)
-    #
-    #
     # def ArraySubtractionMultiprocessing(workers, searchPatterns):
     #     foundPatterns = dict()
     #     with Pool(workers) as p:
