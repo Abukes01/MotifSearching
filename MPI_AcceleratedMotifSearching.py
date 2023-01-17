@@ -109,12 +109,13 @@ def readSequences(linestart: int, linestop: int, all=True):
 def vectoriseSequences(k: int, sequences: list):
     """
     Takes a list of sequences and returns an array of arrays, containing k-length pieces of sequences from beginning to
-    end shifting by one nucleotide. Nucleotides are encoded numerically as follows:
+    end shifting right by one nucleotide. Nucleotides are encoded numerically as follows:
 
     A -> 1
     T -> 2
     G -> 3
     C -> 4
+    N -> 0
 
     This is crucial information for decoding the outcome sequences for further processing.
 
@@ -156,42 +157,6 @@ def makeSearchPatterns(refSeq: NDArray, splits: int):
     parts = len(refSeq) // splits
     return np.array_split(refSeq, parts)
 
-
-def vectorEnumerateMotifs(vDNA: NDArray, searchPatterns: NDArray, d: int, subprocessID: int):
-    '''
-    One-by-one Brute-force motif enumeration comparing vector differences of given array elements
-    :param vDNA: Vectorised DNA sequences
-    :param searchPatterns: Patterns which will be searched through in the sequeences
-    :param d: Number of mismatches that may occur in the motifs to be classified as proper
-    :param subprocessID: ID of subprocess/rank (mainly for debugging)
-    :return: A part of the final pattern dictionary
-    '''
-    print(f"[Worker {subprocessID}]: Initializing")
-    # Initialize a dictionary for all patterns to append found motifs to
-    patternsDict_part = {unvectorise(refPattern): [] for refPattern in searchPatterns}
-    print(f"[Worker {subprocessID}]: Initialized, starting work. Displaying debug info every 100 patterns analysed.")
-    sequence_id = 0 # Initialize the sequence counter
-    for sequence in vDNA:
-        sequence_id += 1 # For each sequence went through increment ID by 1
-        # For each k-mer in refSeq
-        for index, k_mer in enumerate(searchPatterns):
-            start = time.perf_counter()
-            # Print verbose progress every 100 k-mers
-            if index % 100 == 0:
-                print(
-                    f"[Worker {subprocessID}]: Comparing {index + 1}/{len(searchPatterns)} in sequence {sequence_id}/{len(vDNA)}")
-            # for k_mer' in sequence
-            for k_merPrime in sequence:
-                # Calculate the difference in k-mers
-                patternDiff = k_merPrime - k_mer
-                # If 0difference count is less or equal to mismatch threshold
-                if np.count_nonzero(patternDiff) <= d:
-                    # Append found proper k-mer to appropriate dictionary entry
-                    patternsDict_part[unvectorise(searchPatterns[index])].append(unvectorise(k_merPrime))
-            stop = time.perf_counter()
-            print(f"[Worker {subprocessID}]: Comparing took {stop - start} seconds")
-    # Return the resulting dictionary of patterns
-    return patternsDict_part
 
 
 def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
