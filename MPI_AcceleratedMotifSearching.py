@@ -32,7 +32,7 @@ def readSequences(linestart: int, linestop: int, all=True):
     :return: List of strings, each string is the genetic sequence from files in the appropriate folder in order.
     """
 
-    def readFolder(ls=linestart,lstop=linestop, all=all):
+    def readFolder(ls=linestart, lstop=linestop, all=all):
         if not all:
             with open("./compiled_sequences.fasta", 'w') as f:
                 for sequence in os.listdir('./sequences'):
@@ -59,19 +59,20 @@ def readSequences(linestart: int, linestop: int, all=True):
                         f.writelines(readseq)
         del readseq
 
-    def makeSeqenceDict(file:str, mode:str) -> dict:
+    def makeSeqenceDict(file: str, mode: str) -> dict:
         with open(file, mode) as f:
-            headers, sequences = [],[]
+            headers, sequences = [], []
             for line in f.readlines():
                 if line.startswith('>'):
                     headers.append(line)
                 else:
                     sequences.append(line)
-            seqdict = {header:sequence for header, sequence in zip(headers, sequences)}
+            seqdict = {header: sequence for header, sequence in zip(headers, sequences)}
             del headers, sequences
         return seqdict
 
     DNA = []
+    seqdict = dict()
     if not os.path.isfile('./compiled_sequences.fasta'):
         if not os.path.isdir('./sequences'):
             print("There seems to not be a 'sequences' folder present in current directory."
@@ -86,23 +87,26 @@ def readSequences(linestart: int, linestop: int, all=True):
                 os.system('read -n1 -r -p "Press any key to continue..."')
         else:
             readFolder()
-            DNA = [sequence.strip('\n') for sequence in makeSeqenceDict('./compiled_sequences.fasta', 'rt').values()]
+            seqdict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
+            DNA = [sequence.strip('\n') for sequence in seqdict.values()]
     else:
         try:
             while True:
                 choice = input("There are sequences that were compiled previously. Load from them? [Y/N]\n?>> ")
                 if choice in ["Y", 'y', '']:
-                    DNA = [sequence.strip('\n') for sequence in makeSeqenceDict('./compiled_sequences.fasta', 'rt').values()]
+                    seqdict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
+                    DNA = [sequence.strip('\n') for sequence in seqdict.values()]
                     break
                 elif choice in ["N", 'n']:
                     readFolder()
-                    DNA = [sequence.strip('\n') for sequence in makeSeqenceDict('./compiled_sequences.fasta', 'rt').values()]
+                    seqdict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
+                    DNA = [sequence.strip('\n') for sequence in seqdict.values()]
                     break
                 else:
                     raise ValueError
         except ValueError:
             print("The provided answer is invalid, try Y or N.\n")
-    return DNA
+    return DNA, seqdict
 
 
 # Vectorise the sequences read as plaintext
@@ -124,13 +128,13 @@ def vectoriseSequences(k: int, sequences: list):
     :return: An array of arrays containing k-length numerically encoded pieces of given sequences in appropriate order.
     """
 
-    numDNA = [] # Define starting list for vectorisation
-    for sequence in sequences: # For each sequence in sequences
-        numSequence = [] # Define a temporary list for appending conversion outcome
-        for nucleotide in sequence.strip('\n'): # For each nucleotide in given sequence without newlines
-            numSequence.append(conversionDict[nucleotide]) # Append the converted nucleotide number to temporary list
-        numDNA.append(np.array(numSequence)) # Change the list to NumPy Array
-    numDNA = np.array(numDNA) # Change whole converted sequences list to an array
+    numDNA = []  # Define starting list for vectorisation
+    for sequence in sequences:  # For each sequence in sequences
+        numSequence = []  # Define a temporary list for appending conversion outcome
+        for nucleotide in sequence.strip('\n'):  # For each nucleotide in given sequence without newlines
+            numSequence.append(conversionDict[nucleotide])  # Append the converted nucleotide number to temporary list
+        numDNA.append(np.array(numSequence))  # Change the list to NumPy Array
+    numDNA = np.array(numDNA)  # Change whole converted sequences list to an array
     # EG. k=5 ['ATGCCGTAGTTAGGACT'] -> [1, 2, 3, 4, 4, 3, 2, 1, 3, 2, 2, 1, 3, 3, 1, 4, 2]
 
     # Return an array containing fragmented k-length pieces of sequences in appropriate order
@@ -140,10 +144,10 @@ def vectoriseSequences(k: int, sequences: list):
     #  [2, 3, 4, 4, 3], [3, 4, 4, 3, 2], [4, 4, 3, 2, 1], [4, 3, 2, 1, 3], [3, 2, 1, 3, 2], [2, 1, 3, 2, 2],
     #  [1, 3, 2, 2, 1], [3, 2, 2, 1, 3], [2, 2, 1, 3, 3], [2, 1, 3, 3, 1], [1, 3, 3, 1, 4], [3, 3, 1, 4, 2]
     # ]
-    return np.array([[numSequence[i:i + k] for i in range(len(numSequence) - (k-1))] for numSequence in numDNA])
+    return np.array([[numSequence[i:i + k] for i in range(len(numSequence) - (k - 1))] for numSequence in numDNA])
 
 
-def unvectorise(vectorToConvert): # Reverse the process of vectorisation for given vector
+def unvectorise(vectorToConvert):  # Reverse the process of vectorisation for given vector
     return ''.join([unConversionDict[nucleotide] for nucleotide in vectorToConvert])
 
 
@@ -158,8 +162,7 @@ def makeSearchPatterns(refSeq: NDArray, splits: int):
     return np.array_split(refSeq, parts)
 
 
-
-def bigArraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
+def arraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
     '''
     Faster method of brute-force motif enumeration utilizing array subtraction and result comparison
     :param vDNA: Vectorised DNA sequences
@@ -208,18 +211,15 @@ def createJSON(patternsDict, k, d):
     return patternsDict, createdFile
 
 
-if __name__ == '__main__':
-
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.Get_rank()
-
-
-    DNA = readSequences(0, 200, True)
-    print(type(DNA))
-    print(DNA)
+def programInit(lineStart, lineStop, k, all=False):
+    DNA, seqdict = readSequences(lineStart, lineStop, all)
+    vectorDNA = vectoriseSequences(k, DNA)
+    return DNA, vectorDNA
 
 
+def MPIRun():
+    #                           OLD MULTITHREADED IMPLEMENTATION FOR REFERENCE
+    #
     # def PoolProcessing(workers, searchPatterns):
     #     foundPatterns = dict()
     #     with Pool(workers) as p:
@@ -239,3 +239,14 @@ if __name__ == '__main__':
     #         for resultDict in results:
     #             foundPatterns.update(resultDict)
     #     createJSON(foundPatterns, k, d)
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+    pass
+
+
+if __name__ == '__main__':
+    # HERE GOES THE PROGRAM ENGINE
+    # (AND HERE BE DRAGONS)
+    pass
+
