@@ -211,7 +211,7 @@ def createJSON(patternsDict, k, d):
     return patternsDict, createdFile
 
 
-def programInit(lineStart, lineStop, k, all=False):
+def programInit(lineStart: int, lineStop: int, k: int, all=False):
     DNA, seqdict = readSequences(lineStart, lineStop, all)
     vectorDNA = vectoriseSequences(k, DNA)
     return DNA, vectorDNA
