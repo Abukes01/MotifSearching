@@ -14,7 +14,8 @@ from mpi4py import MPI
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
-conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4, "N": 0}
+conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4, "N": 0, "Y": 0, "R": 0, "W": 0, "S": 0, "K": 0, "M": 0, "D": 0,
+                  "V": 0, "H": 0, "B": 0}
 unConversionDict = {1: "A", 2: "T", 3: "G", 4: "C", 0: "N"}
 
 
@@ -27,7 +28,7 @@ def readSequences(linestart: int, linestop: int, all=True):
     where each element is a one-line representative of the gene data from the FASTA files taken in order from the folder.
 
     :param linestart: Where to start reading the files from, set 0 if reading all
-    :param linestop: Where to stop readinf from files at, set 0 if reading all
+    :param linestop: Where to stop reading from files at, set 0 if reading all
     :param all: Whether to read entire sequences or not (Default: True)
     :return: List of strings, each string is the genetic sequence from files in the appropriate folder in order.
     """
@@ -72,7 +73,7 @@ def readSequences(linestart: int, linestop: int, all=True):
         return seqdict
 
     DNA = []
-    seqdict = dict()
+    seqDict = dict()
     if not os.path.isfile('./compiled_sequences.fasta'):
         if not os.path.isdir('./sequences'):
             print("There seems to not be a 'sequences' folder present in current directory."
@@ -87,26 +88,26 @@ def readSequences(linestart: int, linestop: int, all=True):
                 os.system('read -n1 -r -p "Press any key to continue..."')
         else:
             readFolder()
-            seqdict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
-            DNA = [sequence.strip('\n') for sequence in seqdict.values()]
+            seqDict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
+            DNA = [sequence.strip('\n') for sequence in seqDict.values()]
     else:
         try:
             while True:
                 choice = input("There are sequences that were compiled previously. Load from them? [Y/N]\n?>> ")
                 if choice in ["Y", 'y', '']:
-                    seqdict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
-                    DNA = [sequence.strip('\n') for sequence in seqdict.values()]
+                    seqDict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
+                    DNA = [sequence.strip('\n') for sequence in seqDict.values()]
                     break
                 elif choice in ["N", 'n']:
                     readFolder()
-                    seqdict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
-                    DNA = [sequence.strip('\n') for sequence in seqdict.values()]
+                    seqDict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
+                    DNA = [sequence.strip('\n') for sequence in seqDict.values()]
                     break
                 else:
                     raise ValueError
         except ValueError:
             print("The provided answer is invalid, try Y or N.\n")
-    return DNA, seqdict
+    return DNA, seqDict
 
 
 # Vectorise the sequences read as plaintext
@@ -119,7 +120,7 @@ def vectoriseSequences(k: int, sequences: list):
     T -> 2
     G -> 3
     C -> 4
-    N -> 0
+    Any ambiguity code -> 0
 
     This is crucial information for decoding the outcome sequences for further processing.
 
@@ -239,4 +240,3 @@ if __name__ == '__main__':
     # HERE GOES THE PROGRAM ENGINE
     # (AND HERE BE DRAGONS)
     pass
-
