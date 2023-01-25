@@ -93,7 +93,8 @@ def readSequences(linestart: int, linestop: int, all=True):
     else:
         try:
             while True:
-                choice = input("There are sequences that were compiled previously. Load from them? [Y/N]\n?>> ")
+                choice = input(
+                    "There are sequences that were compiled previously. Load from them? (Select N if sequences were updated) [Y/N]\n?>> ")
                 if choice in ["Y", 'y', '']:
                     seqDict = makeSeqenceDict('./compiled_sequences.fasta', 'rt')
                     DNA = [sequence.strip('\n') for sequence in seqDict.values()]
@@ -179,10 +180,7 @@ def arraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: i
         # For each pattern in sequence
         for patternIndex, pattern in enumerate(sequence):
             # Print verbose progress every 100 k-mers
-            if patternIndex % 100 == 0 and patternIndex != 0:
-                print(
-                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
-            elif patternIndex == 0:
+            if patternIndex % 100 == 0 or patternIndex == 0:
                 print(
                     f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
             # Create a pattern (motif) array of length same as reference sequence repeating the compared pattern (motif)
@@ -213,12 +211,17 @@ def createJSON(patternsDict, k, d):
 
 
 def programInit(lineStart: int, lineStop: int, k: int, all=False):
-    DNA, seqdict = readSequences(lineStart, lineStop, all)
+    DNA, seqDict = readSequences(lineStart, lineStop, all)
     vectorDNA = vectoriseSequences(k, DNA)
-    return DNA, vectorDNA
+    vSeqDict = {header: vSequence for header, vSequence in zip(seqDict.keys(), vectorDNA)}
+    return seqDict, vSeqDict
 
 
-def MPIRun():
+def computeResults(*params):
+    pass
+
+
+def MPIRun(seqDict: dict, vSeqDict: dict):
     #                           OLD MULTITHREADED IMPLEMENTATION FOR REFERENCE
     #
     # def ArraySubtractionMultiprocessing(workers, searchPatterns):
@@ -230,13 +233,92 @@ def MPIRun():
     #         for resultDict in results:
     #             foundPatterns.update(resultDict)
     #     createJSON(foundPatterns, k, d)
+
+    # Step 1: Initialize dataset to work on in a clever way, utilizing the maximum of allocated resources in effecient ways
+
+    tasks = []  # temporary placeholder (Tasks should be tuples of the main compute function's parameters)
+    tasksNumber = len(tasks)
+    killTag = tasksNumber + 1
+
+    def master(workers):
+        # Status declaration
+        status = MPI.Status()
+        print(f"Starting program with {size - 1} workers.")
+
+        results = []
+        dummyData = [None]
+
+        # Step 2: Send out first batch of tasks consisting of previously initialized parts of dataset to workers
+
+        sent = 0
+        for _ in range(workers):
+            print(f"Sending task {_} to worker at rank {_+1}")
+            comm.send(tasks[_], dest=_+1, tag=_)
+            sent = _ + 1
+
+        # Step 3: Receive complete computation results and send remaining tasks
+        while sent < tasksNumber:
+            result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status) # assume worker outputs a dict
+            workerID, workerTag = status.Get_source(), status.Get_tag()
+            print(f"Received result from {workerID = } with {workerTag = }, appending to results list")
+            results.append(result)
+            print(f"Sending remaining task {sent} to worker {workerID}")
+            comm.send(tasks[sent], dest=workerID, tag=sent)
+            sent += 1
+
+        # Step 4: Receive the remaining computation results and send the kill tag
+        for _ in range(workers):
+            result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)  # assume worker outputs a dict
+            workerID, workerTag = status.Get_source(), status.Get_tag()
+            print(f"Received result from {workerID = } with {workerTag = }, appending to results list")
+            results.append(result)
+            print("All tasks have been received. Sending KILL tag.")
+            comm.send(dummyData, dest=workerID, tag=killTag)
+
+        # Step 5: Do proper operations on results and save.
+
+
+        print(f"Master node received all completed tasks from all {workers} workers and processed results, terminating...")
+
+    def worker(worker_rank):
+        # Initialize
+        status = MPI.Status()
+        completedTasks = 0
+        print(f'Worker {worker_rank} initialized, waiting for jobs')
+        # Get first tasks
+        params = comm.recv(source=0, status=status)
+        workerTag = status.Get_tag()
+        print(f"Worker {worker_rank} received a task and started work.")
+        # Start operations on received data, send results and receive remaining data, stop when killTag encountered
+        while workerTag != killTag:
+            # compute results and send them to master
+            print(f"Worker {worker_rank} starting on work with tag {workerTag}")
+            result = computeResults(params)
+            comm.send(result, dest=0, tag=workerTag)
+            completedTasks += 1
+            # receive next data to work on and its tag, start computation on it unless killTag encountered
+            params = comm.recv(source=0, status=status)
+            workerTag = status.Get_tag()
+        print(f"Worker {worker_rank} encountered killTag with {completedTasks = }, terminating...")
+
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
-    pass
+
+    if rank == 0:
+        master(size-1)
+    else:
+        worker(rank)
 
 
 if __name__ == '__main__':
     # HERE GOES THE PROGRAM ENGINE
     # (AND HERE BE DRAGONS)
+
+    # How the program should init
+    # programInit <- [linestart (Int), linestop (Int), k-length (Int), all (Boolean)]
+    seqDict, vSeqDict = programInit(0, 20, 15)
+    # debug
+    print(vSeqDict.keys())
+    print(seqDict.keys())
     pass
