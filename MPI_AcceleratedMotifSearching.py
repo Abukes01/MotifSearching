@@ -14,15 +14,15 @@ from mpi4py import MPI
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
-conversionDict = {"A": 1, "T": 2, "G": 3, "C": 4, "N": 0, "Y": 0, "R": 0, "W": 0, "S": 0, "K": 0, "M": 0, "D": 0,
+conversionDict: dict = {"A": 1, "T": 2, "G": 3, "C": 4, "N": 0, "Y": 0, "R": 0, "W": 0, "S": 0, "K": 0, "M": 0, "D": 0,
                   "V": 0, "H": 0, "B": 0}
-unConversionDict = {1: "A", 2: "T", 3: "G", 4: "C", 0: "N"}
+unConversionDict: dict = {1: "A", 2: "T", 3: "G", 4: "C", 0: "N"}
 
 
 # Load data as plaintext and save all sequences into a separate file (same as in normal program)
 # This is relatively fast compared to the rest of the algorithms, and I'm a little too lazy to change already
 # proven to work code. If anyone wishes to optimize it, go for it, just make sure it works as intended :)
-def readSequences(linestart: int, linestop: int, all=True):
+def readSequences(linestart: int, linestop: int, all=True) -> (list, dict):
     """
     Compiles sequences in the appropriate folder into one file for easy access and returns a list of strings,
     where each element is a one-line representative of the gene data from the FASTA files taken in order from the folder.
@@ -112,7 +112,7 @@ def readSequences(linestart: int, linestop: int, all=True):
 
 
 # Vectorise the sequences read as plaintext
-def vectoriseSequences(k: int, sequences: list):
+def vectoriseSequences(k: int, sequences: list) -> NDArray:
     """
     Takes a list of sequences and returns an array of arrays, containing k-length pieces of sequences from beginning to
     end shifting right by one nucleotide. Nucleotides are encoded numerically as follows:
@@ -149,11 +149,11 @@ def vectoriseSequences(k: int, sequences: list):
     return np.array([[numSequence[i:i + k] for i in range(len(numSequence) - (k - 1))] for numSequence in numDNA])
 
 
-def unvectorise(vectorToConvert):  # Reverse the process of vectorisation for given vector
+def unvectorise(vectorToConvert) -> str:  # Reverse the process of vectorisation for given vector
     return ''.join([unConversionDict[nucleotide] for nucleotide in vectorToConvert])
 
 
-def makeSearchPatterns(refSeq: NDArray, splits: int):
+def makeSearchPatterns(refSeq: NDArray, splits: int) -> NDArray:
     '''
     Return a partitioned array of patterns to send out ot subprocesses
     :param refSeq: Reference sequence to partition
@@ -164,7 +164,7 @@ def makeSearchPatterns(refSeq: NDArray, splits: int):
     return np.array_split(refSeq, parts)
 
 
-def arraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int):
+def arraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int) -> dict:
     '''
     Faster method of brute-force motif enumeration utilizing array subtraction and result comparison
     :param vDNA: Vectorised DNA sequences
@@ -194,7 +194,7 @@ def arraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: i
     return patternDict_part
 
 
-def createJSON(patternsDict, k, d):
+def createJSON(patternsDict: dict, k: int, d: int) -> (dict, str):
     '''
     Write out program results in JSON format
     :param patternsDict: Dictionary to write out into the file
@@ -210,18 +210,28 @@ def createJSON(patternsDict, k, d):
     return patternsDict, createdFile
 
 
-def programInit(lineStart: int, lineStop: int, k: int, all=False):
+def programInit(lineStart: int, lineStop: int, k: int, all=False) -> (dict, dict):
     DNA, seqDict = readSequences(lineStart, lineStop, all)
     vectorDNA = vectoriseSequences(k, DNA)
     vSeqDict = {header: vSequence for header, vSequence in zip(seqDict.keys(), vectorDNA)}
     return seqDict, vSeqDict
 
 
-def computeResults(*params):
-    pass
+def computeResults(sequenceID: str, vSequence: NDArray, vSearchPatterns: NDArray, mismatches: int,
+                   workerID: str | int) -> dict:
+    resultPatternDict = {sequenceID: {unvectorise(searchpattern): [] for searchpattern in vSearchPatterns}}
+    for patternID, pattern in enumerate(vSequence):
+        if patternID % 20 == 0 or patternID == 0:
+            print(f"[{workerID = }] Comparing pattern {patternID + 1}/{len(vSequence)}")
+        patternArray = np.tile(pattern, [len(vSearchPatterns), 1])
+        subtractionResult = vSearchPatterns - patternArray
+        for i, patternPrime in enumerate(subtractionResult):
+            if np.count_nonzero(patternPrime) <= mismatches:
+                resultPatternDict[sequenceID][unvectorise(vSearchPatterns[i])].append(unvectorise(pattern))
+    return resultPatternDict
 
 
-def MPIRun(seqDict: dict, vSeqDict: dict):
+def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray, mismatches: int) -> None:
     #                           OLD MULTITHREADED IMPLEMENTATION FOR REFERENCE
     #
     # def ArraySubtractionMultiprocessing(workers, searchPatterns):
@@ -235,8 +245,12 @@ def MPIRun(seqDict: dict, vSeqDict: dict):
     #     createJSON(foundPatterns, k, d)
 
     # Step 1: Initialize dataset to work on in a clever way, utilizing the maximum of allocated resources in effecient ways
+    seqIDs = list(vSeqDict.keys())
+    vSeqList = list(vSeqDict.values())
+    searchPatternsList = [vSearchPatterns for _ in range(len(seqIDs))]
+    mismatchesList = [mismatches for _ in range(len(seqIDs))]
 
-    tasks = []  # temporary placeholder (Tasks should be tuples of the main compute function's parameters)
+    tasks = [params for params in zip(seqIDs, vSeqList, searchPatternsList, mismatchesList)]  # temporary placeholder (Tasks should be tuples of the main compute function's parameters)
     tasksNumber = len(tasks)
     killTag = tasksNumber + 1
 
@@ -252,13 +266,13 @@ def MPIRun(seqDict: dict, vSeqDict: dict):
 
         sent = 0
         for _ in range(workers):
-            print(f"Sending task {_} to worker at rank {_+1}")
-            comm.send(tasks[_], dest=_+1, tag=_)
+            print(f"Sending task {_} to worker at rank {_ + 1}")
+            comm.send(tasks[_], dest=_ + 1, tag=_)
             sent = _ + 1
 
         # Step 3: Receive complete computation results and send remaining tasks
         while sent < tasksNumber:
-            result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status) # assume worker outputs a dict
+            result = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)  # assume worker outputs a dict
             workerID, workerTag = status.Get_source(), status.Get_tag()
             print(f"Received result from {workerID = } with {workerTag = }, appending to results list")
             results.append(result)
@@ -277,8 +291,8 @@ def MPIRun(seqDict: dict, vSeqDict: dict):
 
         # Step 5: Do proper operations on results and save.
 
-
-        print(f"Master node received all completed tasks from all {workers} workers and processed results, terminating...")
+        print(
+            f"Master node received all completed tasks from all {workers} workers and processed results, terminating...")
 
     def worker(worker_rank):
         # Initialize
@@ -293,7 +307,7 @@ def MPIRun(seqDict: dict, vSeqDict: dict):
         while workerTag != killTag:
             # compute results and send them to master
             print(f"Worker {worker_rank} starting on work with tag {workerTag}")
-            result = computeResults(params)
+            result = computeResults(*params, worker_rank)
             comm.send(result, dest=0, tag=workerTag)
             completedTasks += 1
             # receive next data to work on and its tag, start computation on it unless killTag encountered
@@ -306,7 +320,7 @@ def MPIRun(seqDict: dict, vSeqDict: dict):
     rank = comm.Get_rank()
 
     if rank == 0:
-        master(size-1)
+        master(size - 1)
     else:
         worker(rank)
 
@@ -314,11 +328,4 @@ def MPIRun(seqDict: dict, vSeqDict: dict):
 if __name__ == '__main__':
     # HERE GOES THE PROGRAM ENGINE
     # (AND HERE BE DRAGONS)
-
-    # How the program should init
-    # programInit <- [linestart (Int), linestop (Int), k-length (Int), all (Boolean)]
-    seqDict, vSeqDict = programInit(0, 20, 15)
-    # debug
-    print(vSeqDict.keys())
-    print(seqDict.keys())
     pass
