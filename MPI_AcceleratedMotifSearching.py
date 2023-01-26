@@ -11,11 +11,12 @@ import time
 import numpy as np
 from numpy.typing import NDArray
 from mpi4py import MPI
+from itertools import cycle
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
 conversionDict: dict = {"A": 1, "T": 2, "G": 3, "C": 4, "N": 0, "Y": 0, "R": 0, "W": 0, "S": 0, "K": 0, "M": 0, "D": 0,
-                  "V": 0, "H": 0, "B": 0}
+                        "V": 0, "H": 0, "B": 0}
 unConversionDict: dict = {1: "A", 2: "T", 3: "G", 4: "C", 0: "N"}
 
 
@@ -231,7 +232,7 @@ def computeResults(sequenceID: str, vSequence: NDArray, vSearchPatterns: NDArray
     return resultPatternDict
 
 
-def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray, mismatches: int) -> None:
+def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismatches: int) -> None:
     #                           OLD MULTITHREADED IMPLEMENTATION FOR REFERENCE
     #
     # def ArraySubtractionMultiprocessing(workers, searchPatterns):
@@ -245,26 +246,58 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray, mismatches: 
     #     createJSON(foundPatterns, k, d)
 
     # Step 1: Initialize dataset to work on in a clever way, utilizing the maximum of allocated resources in effecient ways
-    seqIDs = list(vSeqDict.keys())
-    vSeqList = list(vSeqDict.values())
-    searchPatternsList = [vSearchPatterns for _ in range(len(seqIDs))]
-    mismatchesList = [mismatches for _ in range(len(seqIDs))]
+    if len(list(vSeqDict.keys())) >= MPI.COMM_WORLD.size - 1:
+        seqIDs = list(vSeqDict.keys())
+        vSeqList = list(vSeqDict.values())
+        searchPatternsList = [vSearchPatterns for _ in range(len(seqIDs))]
+        mismatchesList = [mismatches for _ in range(len(seqIDs))]
 
-    tasks = [params for params in zip(seqIDs, vSeqList, searchPatternsList, mismatchesList)]  # temporary placeholder (Tasks should be tuples of the main compute function's parameters)
-    tasksNumber = len(tasks)
-    killTag = tasksNumber + 1
+        tasks = [params for params in zip(seqIDs, vSeqList, searchPatternsList,
+                                          mismatchesList)]  # (Tasks should be tuples of the main compute function's parameters)
+        tasksNumber = len(tasks)
+        killTag = tasksNumber + 1
+        resulsDict = {ID:{} for ID in seqIDs}
+    elif len(list(vSeqDict.keys())) < MPI.COMM_WORLD.size - 1:
+        remainingToFill = MPI.COMM_WORLD.size - 1 % len(list(vSeqDict.keys())) # How many free cores remain
+        # Duplicate sequence IDs for free cores
+        rawID = list(vSeqDict.keys())
+        seqIDs = []
+        for ID in rawID:
+            if rawID.index(ID) < remainingToFill:
+                seqIDs.append(ID)
+                seqIDs.append(ID)
+            else:
+                seqIDs.append(ID)
+        # make split sequences for free cores
+        rawVSeq = list(vSeqDict.values())
+        vSeqList = []
+        for seq in rawVSeq:
+            if rawVSeq.index(seq) < remainingToFill:
+                splitseq = np.array_split(seq, 2)
+                vSeqList.append(splitseq[0])
+                vSeqList.append(splitseq[1])
+            else:
+                vSeqList.append(seq)
+        searchPatternsList = [vSearchPatterns for _ in range(len(seqIDs))]
+        mismatchesList = [mismatches for _ in range(len(seqIDs))]
+        tasks = [params for params in zip(seqIDs, vSeqList, searchPatternsList,
+                                          mismatchesList)]  # (Tasks should be tuples of the main compute function's parameters)
+        tasksNumber = len(tasks)
+        killTag = tasksNumber + 1
+        resulsDict = {ID: {} for ID in seqIDs}
 
     def master(workers):
         # Status declaration
         status = MPI.Status()
+        start = MPI.Wtime()
         print(f"Starting program with {size - 1} workers.")
 
-        results = []
-        dummyData = [None]
+        results: list[dict] = []
+        dummyData: list[None] = [None]
 
         # Step 2: Send out first batch of tasks consisting of previously initialized parts of dataset to workers
 
-        sent = 0
+        sent: int = 0
         for _ in range(workers):
             print(f"Sending task {_} to worker at rank {_ + 1}")
             comm.send(tasks[_], dest=_ + 1, tag=_)
@@ -291,8 +324,19 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray, mismatches: 
 
         # Step 5: Do proper operations on results and save.
 
+        for res in results:
+            seqID = str(*list(res.keys()))
+            resulsDict[seqID].update(res[seqID])
+
+        createJSON(resulsDict, k, mismatches)
+
         print(
             f"Master node received all completed tasks from all {workers} workers and processed results, terminating...")
+        stop = MPI.Wtime()
+        time = stop - start
+        with open('./times.csv', 'a+') as t:
+            t.write(f"{size}, {time}")
+
 
     def worker(worker_rank):
         # Initialize
