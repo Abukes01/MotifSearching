@@ -207,12 +207,12 @@ def prepareDataset(vSeqDict: dict, vSearchPatterns: NDArray, mismatches: int):
         resulsDict = {ID: {} for ID in seqIDs}
         return tasks, tasksNumber, killTag, resulsDict
     elif len(list(vSeqDict.keys())) < MPI.COMM_WORLD.size - 1:
-        remainingToFill = MPI.COMM_WORLD.size - 1 % len(list(vSeqDict.keys()))  # How many free cores remain
+        remainingToFill = (MPI.COMM_WORLD.size - 1) - len(list(vSeqDict.keys()))  # How many free cores remain
         # Duplicate sequence IDs for free cores
-        rawID = list(vSeqDict.keys())
+        rawIDs = list(vSeqDict.keys())
         seqIDs = []
-        for ID in rawID:
-            if rawID.index(ID) < remainingToFill:
+        for ID in rawIDs:
+            if rawIDs.index(ID) < remainingToFill:
                 seqIDs.append(ID)
                 seqIDs.append(ID)
             else:
