@@ -1,8 +1,4 @@
-**/*.docx
 **/.idea
 **/compiled_sequences.fasta
 **/*.exe
-**/*.spec
-**/*.json
-**/motifs
-**/times.csv
+#**/motifs
