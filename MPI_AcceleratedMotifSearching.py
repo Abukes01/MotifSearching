@@ -11,7 +11,8 @@ import time
 import numpy as np
 from numpy.typing import NDArray
 from mpi4py import MPI
-from itertools import cycle
+import datetime as dt
+import argparse
 
 # Conversion dictionaries for converting nucleotides to numbers and numbers to nucleotides. The values are of importance
 # and the dictionaries should mirror each other's inverse of key-value pairs.
@@ -154,47 +155,6 @@ def unvectorise(vectorToConvert) -> str:  # Reverse the process of vectorisation
     return ''.join([unConversionDict[nucleotide] for nucleotide in vectorToConvert])
 
 
-def makeSearchPatterns(refSeq: NDArray, splits: int) -> NDArray:
-    '''
-    Return a partitioned array of patterns to send out ot subprocesses
-    :param refSeq: Reference sequence to partition
-    :param splits: How many resulting splits are to be returned
-    :return: A partitioned array of patterns to send out ot subprocesses
-    '''
-    parts = len(refSeq) // splits
-    return np.array_split(refSeq, parts)
-
-
-def arraySubtractionMotifComparison(vDNA: NDArray, searchPatterns: NDArray, d: int, workerID: int) -> dict:
-    '''
-    Faster method of brute-force motif enumeration utilizing array subtraction and result comparison
-    :param vDNA: Vectorised DNA sequences
-    :param searchPatterns: Patterns which will be searched through in the sequeences
-    :param d: Number of mismatches that may occur in the motifs to be classified as proper
-    :param workerID: ID of subprocess/rank (mainly for debugging)
-    :return: A part of the final pattern dictionary
-    '''
-    # Initialize the dictionary for found proper patterns to be appended into
-    patternDict_part = {''.join([unConversionDict[nuc] for nuc in refPattern]): [] for refPattern in searchPatterns}
-    # For each sequence in vDNA
-    for sequenceID, sequence in enumerate(vDNA):
-        # For each pattern in sequence
-        for patternIndex, pattern in enumerate(sequence):
-            # Print verbose progress every 100 k-mers
-            if patternIndex % 100 == 0 or patternIndex == 0:
-                print(
-                    f"[Worker {workerID}]: Comparing pattern {patternIndex + 1}/{len(sequence)} in sequence {sequenceID + 1}/{len(vDNA)}")
-            # Create a pattern (motif) array of length same as reference sequence repeating the compared pattern (motif)
-            patternarray = np.tile(pattern, [len(searchPatterns), 1])
-            # Subtract the reference array and the constructed pattern (motif) array from one another
-            comparisonarray = searchPatterns - patternarray
-            # Iterate over the subtraction result and add only the results whose mismatches are <= d to dictionary
-            for i, patternPrime in enumerate(comparisonarray):
-                if np.count_nonzero(patternPrime) <= d:
-                    patternDict_part[unvectorise(searchPatterns[i])].append(unvectorise(pattern))
-    return patternDict_part
-
-
 def createJSON(patternsDict: dict, k: int, d: int) -> (dict, str):
     '''
     Write out program results in JSON format
@@ -205,7 +165,9 @@ def createJSON(patternsDict: dict, k: int, d: int) -> (dict, str):
     '''
     if not os.path.isdir('./motifs'):
         os.mkdir('./motifs')
-    with open(f'./motifs/({k},{d})-motifs.json', 'w') as m:
+    date = str(dt.date.today())
+    date.replace('-', '_')
+    with open(f'./motifs/({k},{d})-motifs_{date}_{time.strftime("%H_%M_%S", time.localtime())}.json', 'w') as m:
         json.dump(patternsDict, m)
     createdFile = f'({k},{d})-motifs.json'
     return patternsDict, createdFile
@@ -219,11 +181,9 @@ def programInit(lineStart: int, lineStop: int, k: int, all=False) -> (dict, dict
 
 
 def computeResults(sequenceID: str, vSequence: NDArray, vSearchPatterns: NDArray, mismatches: int,
-                   workerID: str | int) -> dict:
+                   workerID, workerTag: int) -> dict:
     resultPatternDict = {sequenceID: {unvectorise(searchpattern): [] for searchpattern in vSearchPatterns}}
     for patternID, pattern in enumerate(vSequence):
-        if patternID % 20 == 0 or patternID == 0:
-            print(f"[{workerID = }] Comparing pattern {patternID + 1}/{len(vSequence)}")
         patternArray = np.tile(pattern, [len(vSearchPatterns), 1])
         subtractionResult = vSearchPatterns - patternArray
         for i, patternPrime in enumerate(subtractionResult):
@@ -232,19 +192,7 @@ def computeResults(sequenceID: str, vSequence: NDArray, vSearchPatterns: NDArray
     return resultPatternDict
 
 
-def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismatches: int) -> None:
-    #                           OLD MULTITHREADED IMPLEMENTATION FOR REFERENCE
-    #
-    # def ArraySubtractionMultiprocessing(workers, searchPatterns):
-    #     foundPatterns = dict()
-    #     with Pool(workers) as p:
-    #         results = p.starmap(bigArraySubtractionMotifComparison,
-    #                             [(vDNA, searchPatterns, d, ID) for ID, searchPatterns in
-    #                              enumerate(searchPatterns)])
-    #         for resultDict in results:
-    #             foundPatterns.update(resultDict)
-    #     createJSON(foundPatterns, k, d)
-
+def prepareDataset(vSeqDict: dict, vSearchPatterns: NDArray, mismatches: int):
     # Step 1: Initialize dataset to work on in a clever way, utilizing the maximum of allocated resources in effecient ways
     if len(list(vSeqDict.keys())) >= MPI.COMM_WORLD.size - 1:
         seqIDs = list(vSeqDict.keys())
@@ -256,9 +204,10 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
                                           mismatchesList)]  # (Tasks should be tuples of the main compute function's parameters)
         tasksNumber = len(tasks)
         killTag = tasksNumber + 1
-        resulsDict = {ID:{} for ID in seqIDs}
+        resulsDict = {ID: {} for ID in seqIDs}
+        return tasks, tasksNumber, killTag, resulsDict
     elif len(list(vSeqDict.keys())) < MPI.COMM_WORLD.size - 1:
-        remainingToFill = MPI.COMM_WORLD.size - 1 % len(list(vSeqDict.keys())) # How many free cores remain
+        remainingToFill = MPI.COMM_WORLD.size - 1 % len(list(vSeqDict.keys()))  # How many free cores remain
         # Duplicate sequence IDs for free cores
         rawID = list(vSeqDict.keys())
         seqIDs = []
@@ -271,13 +220,13 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
         # make split sequences for free cores
         rawVSeq = list(vSeqDict.values())
         vSeqList = []
-        for seq in rawVSeq:
-            if rawVSeq.index(seq) < remainingToFill:
-                splitseq = np.array_split(seq, 2)
+        for i in range(len(rawVSeq)):
+            if i < remainingToFill:
+                splitseq = np.array_split(rawVSeq[i], 2)
                 vSeqList.append(splitseq[0])
                 vSeqList.append(splitseq[1])
             else:
-                vSeqList.append(seq)
+                vSeqList.append(rawVSeq[i])
         searchPatternsList = [vSearchPatterns for _ in range(len(seqIDs))]
         mismatchesList = [mismatches for _ in range(len(seqIDs))]
         tasks = [params for params in zip(seqIDs, vSeqList, searchPatternsList,
@@ -285,6 +234,46 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
         tasksNumber = len(tasks)
         killTag = tasksNumber + 1
         resulsDict = {ID: {} for ID in seqIDs}
+        return tasks, tasksNumber, killTag, resulsDict
+
+if __name__ == '__main__':
+    # HERE GOES THE PROGRAM ENGINE
+    # (AND HERE BE DRAGONS)
+
+    comm = MPI.COMM_WORLD
+    size = comm.Get_size()
+    rank = comm.Get_rank()
+
+    if MPI.COMM_WORLD.rank == 0:
+        parser = argparse.ArgumentParser('MotifSearcher',
+                                         'MotifSearcher.py -k Length -d Mismatches -lstart Startline -lstop Stopline [-all readAll]')
+        parser.add_argument('-k', '--Mer_length', required=True, help='Length of mers')
+        parser.add_argument('-d', '--Mismatch', required=True, help='Maximum number of mismatches')
+        parser.add_argument('-lstart', '--Startline', required=True, help='From which line start comparing')
+        parser.add_argument('-lstop', '--Stopline', required=True, help='At which line stop reading')
+        parser.add_argument('-all', '--Read_all', action='store_true', required=False,
+                            help='Whether to read entirety of all sequences (Ignores lstart and lstop)')
+        args = vars(parser.parse_args())
+        k = int(args['Mer_length'])
+        mismatches = int(args['Mismatch'])
+        linestart, linestop = int(args['Startline']), int(args['Stopline'])
+        seqDict, vSeqDict = programInit(linestart, linestop, k, all=args['Read_all'])
+        vSearchPatterns = list(vSeqDict.values())[0]
+        tasks, tasksNumber, killTag, resultsDict = prepareDataset(vSeqDict, vSearchPatterns, mismatches)
+    else:
+        k = None
+        mismatches = None
+        seqDict, vSeqDict = None, None
+        vSearchPatterns = None
+        tasks = None
+        tasksNumber = None
+        killTag = None
+        resultsDict = None
+
+    if MPI.COMM_WORLD.size < 2:
+        print("This program must have at least 2 processors allocated to function. please check your run command")
+        exit(-1)
+
 
     def master(workers):
         # Status declaration
@@ -293,7 +282,7 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
         print(f"Starting program with {size - 1} workers.")
 
         results: list[dict] = []
-        dummyData: list[None] = [None]
+        dummyData: list[None] = [None, None, None, None]
 
         # Step 2: Send out first batch of tasks consisting of previously initialized parts of dataset to workers
 
@@ -324,18 +313,18 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
 
         # Step 5: Do proper operations on results and save.
 
-        for res in results:
-            seqID = str(*list(res.keys()))
-            resulsDict[seqID].update(res[seqID])
+        for result in results:
+            ID = list(result.keys())[0]
+            resultsDict[ID].update(result[ID])
 
-        createJSON(resulsDict, k, mismatches)
+        createJSON(resultsDict, k, mismatches)
 
         print(
             f"Master node received all completed tasks from all {workers} workers and processed results, terminating...")
         stop = MPI.Wtime()
         time = stop - start
         with open('./times.csv', 'a+') as t:
-            t.write(f"{size}, {time}")
+            t.write(f"{size}, {time}\n")
 
 
     def worker(worker_rank):
@@ -351,7 +340,7 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
         while workerTag != killTag:
             # compute results and send them to master
             print(f"Worker {worker_rank} starting on work with tag {workerTag}")
-            result = computeResults(*params, worker_rank)
+            result = computeResults(*params, worker_rank, workerTag)
             comm.send(result, dest=0, tag=workerTag)
             completedTasks += 1
             # receive next data to work on and its tag, start computation on it unless killTag encountered
@@ -359,17 +348,7 @@ def MPIRun(seqDict: dict, vSeqDict: dict, vSearchPatterns: NDArray,k:int, mismat
             workerTag = status.Get_tag()
         print(f"Worker {worker_rank} encountered killTag with {completedTasks = }, terminating...")
 
-    comm = MPI.COMM_WORLD
-    size = comm.Get_size()
-    rank = comm.Get_rank()
-
     if rank == 0:
         master(size - 1)
     else:
         worker(rank)
-
-
-if __name__ == '__main__':
-    # HERE GOES THE PROGRAM ENGINE
-    # (AND HERE BE DRAGONS)
-    pass
